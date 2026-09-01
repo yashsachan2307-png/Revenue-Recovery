@@ -1,0 +1,9 @@
+{
+  "name": "revenue-recovery",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend",
+    "shared"
+  ]
+}

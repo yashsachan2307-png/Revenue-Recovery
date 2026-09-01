@@ -1,0 +1,50 @@
+@import "tailwindcss";
+
+@theme {
+  --color-paper: var(--color-paper);
+  --color-ink: var(--color-ink);
+  --color-border-subtle: var(--color-border-subtle);
+  --color-success: var(--color-success);
+  --color-failure: var(--color-failure);
+  --color-warning: var(--color-warning);
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+@layer base {
+  :root {
+    --color-paper: #f4f0ec; /* Warm off-white */
+    --color-ink: #1a1a1a;
+    --color-border-subtle: #cccccc;
+    --color-success: #2e7d32;
+    --color-failure: #c62828;
+    --color-warning: #f57f17;
+  }
+
+  .dark {
+    --color-paper: #121212; /* Charcoal */
+    --color-ink: #e0e0e0; /* Warm light text */
+    --color-border-subtle: #333333;
+    --color-success: #4caf50;
+    --color-failure: #ef5350;
+    --color-warning: #ffb300;
+  }
+}
+
+body {
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code, kbd, pre, samp {
+  font-family: var(--font-mono);
+}
+
+.financial-number {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}

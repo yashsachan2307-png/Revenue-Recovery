@@ -1,0 +1,8 @@
+node_modules/
+.env
+.DS_Store
+dist/
+build/
+backend/revenue_recovery.db
+backend/revenue_recovery.db-wal
+backend/revenue_recovery.db-shm
