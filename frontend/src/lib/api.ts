@@ -13,7 +13,7 @@ export interface Transaction {
 
 export const api = {
   getOverview: async () => {
-    const res = await fetch(`${BASE_URL}/overview`);
+    const res = await fetch(`${BASE_URL}/dashboard/summary`);
     if (!res.ok) throw new Error("Failed to fetch overview");
     const data = await res.json();
     return {
@@ -27,10 +27,7 @@ export const api = {
         recommendedAction: inc.recommended_action || "Wait & Retry",
         status: inc.recovery_status || "detected",
         timestamp: inc.created_at
-      })),
-      failureDistribution: data.failureDistribution,
-      riskDistribution: data.riskDistribution,
-      topCustomers: data.topCustomers
+      }))
     };
   },
   getPayments: async (status?: string) => {
@@ -40,13 +37,13 @@ export const api = {
     return res.json();
   },
   getRecoveryOpportunities: async () => {
-    const res = await fetch(`${BASE_URL}/recovery-opportunities`);
-    if (!res.ok) throw new Error("Failed to fetch opportunities");
+    const res = await fetch(`${BASE_URL}/recovery/cases`);
+    if (!res.ok) throw new Error("Failed to fetch cases");
     return res.json();
   },
   getRecoveryEvents: async () => {
-    const res = await fetch(`${BASE_URL}/recovery-events`);
-    if (!res.ok) throw new Error("Failed to fetch recovery events");
+    const res = await fetch(`${BASE_URL}/audit`);
+    if (!res.ok) throw new Error("Failed to fetch audit events");
     return res.json();
   },
   getCustomers: async () => {
@@ -55,13 +52,27 @@ export const api = {
     return res.json();
   },
   getFailureAnalytics: async () => {
-    const res = await fetch(`${BASE_URL}/analytics/failures`);
+    const res = await fetch(`${BASE_URL}/dashboard/failures`);
     if (!res.ok) throw new Error("Failed to fetch failure analytics");
     return res.json();
   },
   getRecoveryAnalytics: async () => {
     const res = await fetch(`${BASE_URL}/analytics/recovery`);
     if (!res.ok) throw new Error("Failed to fetch recovery analytics");
+    return res.json();
+  },
+  analyzeCase: async (id: string) => {
+    const res = await fetch(`${BASE_URL}/recovery/cases/${id}/analyse`, { method: "POST" });
+    if (!res.ok) throw new Error("Failed to analyze case");
+    return res.json();
+  },
+  executeAction: async (id: string, payload: any) => {
+    const res = await fetch(`${BASE_URL}/recovery/cases/${id}/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error("Failed to execute action");
     return res.json();
   }
 }

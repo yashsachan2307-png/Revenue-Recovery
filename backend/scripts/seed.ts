@@ -37,7 +37,7 @@ function seed() {
 
     // Generate 450 Payments (with ~30% failure rate we should get >100 failures)
     const amounts = [850, 2499, 8499, 14500, 21000, 49999, 124999];
-    const failureReasons = ["insufficient_funds", "card_declined", "expired_card", "bank_timeout", "authentication_failed", "network_error"];
+    const failureReasons = ["INSUFFICIENT_FUNDS", "CARD_DECLINED", "EXPIRED_CARD", "BANK_TIMEOUT", "AUTHENTICATION_FAILED", "NETWORK_ERROR", "UPI_TIMEOUT"];
     
     for (let i = 0; i < 450; i++) {
       const pId = `PAY-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;

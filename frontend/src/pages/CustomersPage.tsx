@@ -1,24 +1,25 @@
 import * as React from "react"
+import { useQuery } from "@tanstack/react-query"
 import { AppShell } from "../layouts/AppShell"
 import { DataTable } from "../components/ui/DataTable"
 import { api } from "../lib/api"
 import { formatCurrency } from "../lib/utils"
 
 export function CustomersPage() {
-  const [customers, setCustomers] = React.useState<any[]>([])
-  const [loading, setLoading] = React.useState(true)
+  const { data: customers = [], isLoading: loading, isError } = useQuery({
+    queryKey: ['customers'],
+    queryFn: () => api.getCustomers()
+  })
 
-  React.useEffect(() => {
-    async function loadData() {
-      try {
-        const data = await api.getCustomers()
-        setCustomers(data)
-      } finally {
-        setLoading(false)
-      }
-    }
-    loadData()
-  }, [])
+  if (isError) {
+    return (
+      <AppShell title="Customers">
+        <div className="flex h-64 items-center justify-center font-mono text-sm uppercase text-red-500">
+          [ SYSTEM ERROR: Failed to load data ]
+        </div>
+      </AppShell>
+    );
+  }
 
   const columns = [
     {

@@ -1,4 +1,5 @@
 import * as React from "react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { AppShell } from "../layouts/AppShell"
 import { DataTable } from "../components/ui/DataTable"
 import { api } from "../lib/api"
@@ -6,23 +7,23 @@ import { formatCurrency } from "../lib/utils"
 import { AgentConsole } from "../components/AgentConsole"
 
 export function AtRiskPage() {
-  const [opportunities, setOpportunities] = React.useState<any[]>([])
-  const [loading, setLoading] = React.useState(true)
+  const queryClient = useQueryClient()
   const [selectedOpportunityId, setSelectedOpportunityId] = React.useState<string | null>(null)
 
-  const loadData = React.useCallback(async () => {
-    setLoading(true)
-    try {
-      const data = await api.getRecoveryOpportunities()
-      setOpportunities(data)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  const { data: opportunities = [], isLoading: loading, isError } = useQuery({
+    queryKey: ['recovery-opportunities'],
+    queryFn: () => api.getRecoveryOpportunities()
+  })
 
-  React.useEffect(() => {
-    loadData()
-  }, [loadData])
+  if (isError) {
+    return (
+      <AppShell title="At Risk">
+        <div className="flex h-64 items-center justify-center font-mono text-sm uppercase text-red-500">
+          [ SYSTEM ERROR: Failed to load data ]
+        </div>
+      </AppShell>
+    );
+  }
 
   const renderRiskIndicator = (level: string) => {
     const l = level.toLowerCase();
@@ -113,7 +114,7 @@ export function AtRiskPage() {
           onClose={() => setSelectedOpportunityId(null)}
           onComplete={() => {
             setSelectedOpportunityId(null);
-            loadData();
+            queryClient.invalidateQueries({ queryKey: ['recovery-opportunities'] });
           }}
         />
       )}

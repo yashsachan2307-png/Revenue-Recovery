@@ -83,5 +83,15 @@ export function initDb() {
       FOREIGN KEY (recovery_opportunity_id) REFERENCES recovery_opportunities(id),
       FOREIGN KEY (payment_id) REFERENCES payments(id)
     );
+    
+    CREATE TABLE IF NOT EXISTS policies (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL,
+      rule_type TEXT NOT NULL,
+      parameters TEXT NOT NULL,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL
+    );
   `);
 }

@@ -1,4 +1,5 @@
 import * as React from "react"
+import { useQuery } from "@tanstack/react-query"
 import { AppShell } from "../layouts/AppShell"
 import { MetricBlock } from "../components/ui/MetricBlock"
 import { DataTable } from "../components/ui/DataTable"
@@ -6,20 +7,31 @@ import { api, type Transaction } from "../lib/api"
 import { formatCurrency } from "../lib/utils"
 
 export function OverviewPage() {
-  const [data, setData] = React.useState<any>(null)
-  const [loading, setLoading] = React.useState(true)
-
-  React.useEffect(() => {
-    async function loadData() {
-      try {
-        const result = await api.getOverview()
-        setData(result)
-      } finally {
-        setLoading(false)
-      }
+  const { data, isLoading: loading, isError } = useQuery({
+    queryKey: ['overview'],
+    queryFn: async () => {
+      const [overviewData, failuresData, recoveryData] = await Promise.all([
+        api.getOverview(),
+        api.getFailureAnalytics(),
+        api.getRecoveryAnalytics()
+      ]);
+      return {
+        ...overviewData,
+        failureDistribution: failuresData,
+        ...recoveryData
+      };
     }
-    loadData()
-  }, [])
+  })
+
+  if (isError) {
+    return (
+      <AppShell title="Merchant Recovery Operations">
+        <div className="flex h-64 items-center justify-center font-mono text-sm uppercase text-red-500">
+          [ SYSTEM ERROR: Failed to load data ]
+        </div>
+      </AppShell>
+    );
+  }
 
   const renderRiskIndicator = (level: string) => {
     const l = level.toLowerCase();

@@ -12,8 +12,10 @@ router.get("/health", (req, res) => {
   res.json({ status: "ok" });
 });
 
-router.get("/overview", (req, res) => {
-  // Generate opportunities before getting metrics to keep data fresh for demo
+// Mapping Phase 4 Endpoints
+
+// GET /api/dashboard/summary
+router.get("/dashboard/summary", (req, res) => {
   RecoveryOpportunityService.generateOpportunities();
   
   const metrics = RevenueIntelligenceService.getOverviewMetrics();
@@ -27,13 +29,30 @@ router.get("/overview", (req, res) => {
     LIMIT 10
   `).all();
   
-  const failureDistribution = RevenueIntelligenceService.getFailureDistribution();
-  const riskDistribution = RevenueIntelligenceService.getRiskDistribution();
-  const topCustomers = RevenueIntelligenceService.getTopCustomersByRisk(6);
-  
-  res.json({ metrics, recentIncidents, failureDistribution, riskDistribution, topCustomers });
+  res.json({ metrics, recentIncidents });
 });
 
+// GET /api/dashboard/trend
+router.get("/dashboard/trend", (req, res) => {
+  // Simple trend: last 7 days of failures
+  const trend = db.prepare(`
+    SELECT date(created_at) as date, COUNT(*) as count, SUM(amount) as value
+    FROM payments
+    WHERE status = 'failed'
+    GROUP BY date(created_at)
+    ORDER BY date(created_at) DESC
+    LIMIT 7
+  `).all();
+  res.json(trend);
+});
+
+// GET /api/dashboard/failures
+router.get("/dashboard/failures", (req, res) => {
+  const distribution = RevenueIntelligenceService.getFailureDistribution();
+  res.json(distribution);
+});
+
+// GET /api/payments
 router.get("/payments", (req, res) => {
   const limit = req.query.limit || 100;
   let statusFilter = req.query.status ? `WHERE p.status = '${req.query.status}'` : '';
@@ -48,6 +67,7 @@ router.get("/payments", (req, res) => {
   res.json(payments);
 });
 
+// GET /api/payments/:id
 router.get("/payments/:id", (req, res) => {
   const payment = db.prepare(`
     SELECT p.*, c.name as customer_name 
@@ -62,6 +82,7 @@ router.get("/payments/:id", (req, res) => {
   res.json({ payment, opportunity });
 });
 
+// GET /api/customers
 router.get("/customers", (req, res) => {
   const limit = req.query.limit || 50;
   const customers = db.prepare(`
@@ -75,6 +96,7 @@ router.get("/customers", (req, res) => {
   res.json(customers);
 });
 
+// GET /api/customers/:id
 router.get("/customers/:id", (req, res) => {
   const customer = db.prepare(`SELECT * FROM customers WHERE id = ?`).get(req.params.id);
   if (!customer) return res.status(404).json({ error: "Customer not found" });
@@ -85,7 +107,8 @@ router.get("/customers/:id", (req, res) => {
   res.json({ customer, payments, opportunities });
 });
 
-router.get("/recovery-opportunities", (req, res) => {
+// GET /api/recovery/cases
+router.get("/recovery/cases", (req, res) => {
   const limit = req.query.limit || 50;
   const opps = db.prepare(`
     SELECT r.*, c.name as customer_name, p.failure_reason, p.created_at as payment_date, p.payment_method
@@ -98,25 +121,21 @@ router.get("/recovery-opportunities", (req, res) => {
   res.json(opps);
 });
 
-router.get("/recovery-events", (req, res) => {
-  const limit = req.query.limit || 50;
-  const events = db.prepare(`SELECT * FROM recovery_events ORDER BY created_at DESC LIMIT ?`).all(limit);
-  res.json(events);
+// GET /api/recovery/cases/:id
+router.get("/recovery/cases/:id", (req, res) => {
+  const opp = db.prepare(`
+    SELECT r.*, c.name as customer_name, p.failure_reason, p.created_at as payment_date, p.payment_method
+    FROM recovery_opportunities r
+    JOIN customers c ON r.customer_id = c.id
+    JOIN payments p ON r.payment_id = p.id
+    WHERE r.id = ?
+  `).get(req.params.id);
+  if (!opp) return res.status(404).json({ error: "Case not found" });
+  res.json(opp);
 });
 
-router.get("/analytics/failures", (req, res) => {
-  const distribution = RevenueIntelligenceService.getFailureDistribution();
-  res.json(distribution);
-});
-
-router.get("/analytics/recovery", (req, res) => {
-  const riskDistribution = RevenueIntelligenceService.getRiskDistribution();
-  const topCustomers = RevenueIntelligenceService.getTopCustomersByRisk(5);
-  res.json({ riskDistribution, topCustomers });
-});
-
-// Phase 3 AI Agents Endpoints
-router.post("/recovery/:id/analyze", async (req, res) => {
+// POST /api/recovery/cases/:id/analyse
+router.post("/recovery/cases/:id/analyse", async (req, res) => {
   try {
     const decision = await RecoveryAgent.analyzeOpportunity(req.params.id);
     const policyResult = PolicyEngine.evaluate(req.params.id, decision);
@@ -126,7 +145,8 @@ router.post("/recovery/:id/analyze", async (req, res) => {
   }
 });
 
-router.post("/recovery/:id/execute", async (req, res) => {
+// POST /api/recovery/cases/:id/action
+router.post("/recovery/cases/:id/action", async (req, res) => {
   try {
     const { agentDecision, policyResult } = req.body;
     if (!agentDecision || !policyResult) {
@@ -138,6 +158,35 @@ router.post("/recovery/:id/execute", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// GET /api/audit
+router.get("/audit", (req, res) => {
+  const limit = req.query.limit || 100;
+  const logs = db.prepare(`
+    SELECT a.*, p.amount, p.currency
+    FROM audit_logs a
+    JOIN payments p ON a.payment_id = p.id
+    ORDER BY a.created_at DESC
+    LIMIT ?
+  `).all(limit);
+  res.json(logs);
+});
+
+// Legacy backward-compat aliases for frontend while we migrate
+router.get("/overview", (req, res) => {
+  RecoveryOpportunityService.generateOpportunities();
+  const metrics = RevenueIntelligenceService.getOverviewMetrics();
+  const recentIncidents = db.prepare(`SELECT p.*, r.recommended_action, r.status as recovery_status, r.severity, c.name as customer_name FROM payments p LEFT JOIN recovery_opportunities r ON p.id = r.payment_id JOIN customers c ON p.customer_id = c.id WHERE p.status = 'failed' ORDER BY p.created_at DESC LIMIT 10`).all();
+  const failureDistribution = RevenueIntelligenceService.getFailureDistribution();
+  const riskDistribution = RevenueIntelligenceService.getRiskDistribution();
+  const topCustomers = RevenueIntelligenceService.getTopCustomersByRisk(6);
+  res.json({ metrics, recentIncidents, failureDistribution, riskDistribution, topCustomers });
+});
+router.get("/recovery-opportunities", (req, res) => {
+  res.redirect("/api/recovery/cases");
+});
+router.post("/recovery/:id/analyze", (req, res) => res.redirect(307, `/api/recovery/cases/${req.params.id}/analyse`));
+router.post("/recovery/:id/execute", (req, res) => res.redirect(307, `/api/recovery/cases/${req.params.id}/action`));
 
 export { router };
 

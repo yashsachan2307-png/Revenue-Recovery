@@ -1,4 +1,5 @@
 import * as React from "react"
+import { useQuery } from "@tanstack/react-query"
 import { AppShell } from "../layouts/AppShell"
 import { DataTable } from "../components/ui/DataTable"
 import { Badge } from "../components/ui/Badge"
@@ -6,20 +7,20 @@ import { api } from "../lib/api"
 import { formatCurrency } from "../lib/utils"
 
 export function RecoveriesPage() {
-  const [opportunities, setOpportunities] = React.useState<any[]>([])
-  const [loading, setLoading] = React.useState(true)
+  const { data: opportunities = [], isLoading: loading, isError } = useQuery({
+    queryKey: ['recovery-opportunities'],
+    queryFn: () => api.getRecoveryOpportunities()
+  })
 
-  React.useEffect(() => {
-    async function loadData() {
-      try {
-        const data = await api.getRecoveryOpportunities() // Ideally filter by status or hit recovery-events
-        setOpportunities(data)
-      } finally {
-        setLoading(false)
-      }
-    }
-    loadData()
-  }, [])
+  if (isError) {
+    return (
+      <AppShell title="Recoveries">
+        <div className="flex h-64 items-center justify-center font-mono text-sm uppercase text-red-500">
+          [ SYSTEM ERROR: Failed to load data ]
+        </div>
+      </AppShell>
+    );
+  }
 
   const columns = [
     {
