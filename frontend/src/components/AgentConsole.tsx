@@ -1,7 +1,5 @@
 import * as React from "react"
 import { Button } from "./ui/Button"
-import { api } from "../lib/api"
-import { formatCurrency } from "../lib/utils"
 
 interface AgentConsoleProps {
   opportunityId: string | null;
@@ -10,7 +8,6 @@ interface AgentConsoleProps {
 }
 
 export function AgentConsole({ opportunityId, onClose, onComplete }: AgentConsoleProps) {
-  const [loading, setLoading] = React.useState(true)
   const [analyzing, setAnalyzing] = React.useState(true)
   const [executing, setExecuting] = React.useState(false)
   const [data, setData] = React.useState<any>(null)
@@ -30,7 +27,7 @@ export function AgentConsole({ opportunityId, onClose, onComplete }: AgentConsol
         console.error(e)
       } finally {
         setAnalyzing(false)
-        setLoading(false)
+        setAnalyzing(false)
       }
     }
     

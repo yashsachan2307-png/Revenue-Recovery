@@ -31,9 +31,9 @@ export function Sidebar() {
     { name: "At Risk", path: "/at-risk" },
     { name: "Recoveries", path: "/recoveries" },
     { name: "Customers", path: "/customers" },
-    { name: "Agent", path: "/agent" },
+    { name: "Agent Console", path: "/agent" },
     { name: "Audit Log", path: "/audit-log" },
-    { name: "Evaluation", path: "/evaluation" },
+    { name: "Reports", path: "/reports" },
   ]
 
   return (
@@ -51,7 +51,7 @@ export function Sidebar() {
           <NavLink
             key={link.name}
             to={link.path}
-            className={({ isActive }) => `block border px-3 py-2 text-sm font-bold uppercase tracking-wider transition-colors ${
+            className={({ isActive }: { isActive: boolean }) => `block border px-3 py-2 text-sm font-bold uppercase tracking-wider transition-colors ${
               isActive
                 ? "border-[var(--color-ink)] bg-[var(--color-ink)] text-[var(--color-paper)]"
                 : "border-transparent text-[var(--color-ink)] hover:border-[var(--color-border-subtle)]"

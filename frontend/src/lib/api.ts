@@ -1,4 +1,4 @@
-const BASE_URL = "http://localhost:3001/api";
+const BASE_URL = "/api";
 
 export interface Transaction {
   id: string
@@ -13,22 +13,33 @@ export interface Transaction {
 
 export const api = {
   getOverview: async () => {
-    const res = await fetch(`${BASE_URL}/dashboard/summary`);
-    if (!res.ok) throw new Error("Failed to fetch overview");
-    const data = await res.json();
-    return {
-      metrics: data.metrics,
-      recentIncidents: data.recentIncidents.map((inc: any) => ({
-        id: inc.id,
-        customer: inc.customer_name || inc.customer_id,
-        amount: inc.amount,
-        failureReason: inc.failure_reason,
-        riskLevel: inc.severity?.toLowerCase() || "low",
-        recommendedAction: inc.recommended_action || "Wait & Retry",
-        status: inc.recovery_status || "detected",
-        timestamp: inc.created_at
-      }))
-    };
+    try {
+      const res = await fetch(`${BASE_URL}/overview`);
+      if (!res.ok) {
+        console.error("Fetch returned not ok:", res.status, res.statusText);
+        throw new Error(`Failed to fetch overview: ${res.status} ${res.statusText}`);
+      }
+      const data = await res.json();
+      return {
+        metrics: data.metrics,
+        recentIncidents: (data.recentIncidents || []).map((inc: any) => ({
+          id: inc.id,
+          customer: inc.customer_name || inc.customer_id,
+          amount: inc.amount,
+          failureReason: inc.failure_reason,
+          riskLevel: inc.severity?.toLowerCase() || "low",
+          recommendedAction: inc.recommended_action || "Wait & Retry",
+          status: inc.recovery_status || "detected",
+          timestamp: inc.created_at
+        })),
+        failureDistribution: data.failureDistribution,
+        riskDistribution: data.riskDistribution,
+        topCustomers: data.topCustomers
+      };
+    } catch (e) {
+      console.error("Fetch API Error:", e);
+      throw e;
+    }
   },
   getPayments: async (status?: string) => {
     const url = status ? `${BASE_URL}/payments?status=${status}` : `${BASE_URL}/payments`;

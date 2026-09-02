@@ -4,7 +4,9 @@ import { PaymentsPage } from "./pages/PaymentsPage"
 import { AtRiskPage } from "./pages/AtRiskPage"
 import { CustomersPage } from "./pages/CustomersPage"
 import { RecoveriesPage } from "./pages/RecoveriesPage"
-// Import other pages as they are created
+import { AgentConsolePage } from "./pages/AgentConsolePage"
+import { AuditLogPage } from "./pages/AuditLogPage"
+import { ReportsPage } from "./pages/ReportsPage"
 
 function App() {
   return (
@@ -14,9 +16,9 @@ function App() {
       <Route path="/at-risk" element={<AtRiskPage />} />
       <Route path="/recoveries" element={<RecoveriesPage />} />
       <Route path="/customers" element={<CustomersPage />} />
-      <Route path="/agent" element={<div className="p-8">Agent Settings (Phase 3)</div>} />
-      <Route path="/audit-log" element={<div className="p-8">Audit Log (Phase 3)</div>} />
-      <Route path="/evaluation" element={<div className="p-8">Evaluation (Phase 3)</div>} />
+      <Route path="/agent" element={<AgentConsolePage />} />
+      <Route path="/audit-log" element={<AuditLogPage />} />
+      <Route path="/reports" element={<ReportsPage />} />
     </Routes>
   )
 }
