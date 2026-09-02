@@ -26,31 +26,47 @@ export class PolicyEngine {
       return { approved: false, reason: "Opportunity not found", finalAction: "STOP" };
     }
 
-    // Rule: Already successful (recovered)
+    return this.evaluateContext(context, decision);
+  }
+
+  static evaluateContext(context: any, decision: AgentDecision): PolicyResult {
+    // 1. Hard constraints (Always on)
     if (context.status === 'recovered') {
       return { approved: false, reason: "Already recovered", finalAction: "STOP" };
     }
 
-    // Rule: Too old (older than 30 days)
-    const paymentDate = new Date(context.created_at);
+    const paymentDate = new Date(context.created_at || new Date());
     const daysOld = (new Date().getTime() - paymentDate.getTime()) / (1000 * 3600 * 24);
     if (daysOld > 30) {
       return { approved: false, reason: "Payment too old (>30 days)", finalAction: "STOP" };
     }
 
-    // Rule: Retry limit reached (e.g. 3 attempts)
-    if (decision.recoveryType === 'WAIT_AND_RETRY' && context.attempt_number >= 3) {
-      return { approved: false, reason: "Max retry limit reached", finalAction: "ESCALATE" };
-    }
+    // 2. Dynamic Policies
+    const policies = db.prepare('SELECT * FROM policies WHERE is_active = 1').all() as any[];
 
-    // Rule: High-value payment needs human approval
-    if (context.amount_at_risk > 50000 && decision.recoveryType !== 'ESCALATE') {
-      return { approved: false, reason: "High-value payment requires manual escalation", finalAction: "ESCALATE" };
-    }
+    for (const policy of policies) {
+      const params = JSON.parse(policy.parameters);
+      
+      if (policy.rule_type === 'MAX_RETRIES') {
+        const maxRetries = params.max || 3;
+        if (decision.recoveryType === 'WAIT_AND_RETRY' && context.attempt_number >= maxRetries) {
+          return { approved: false, reason: "Max retry limit reached", finalAction: "ESCALATE" };
+        }
+      }
 
-    // Rule: Recent notification (assume block if > 2 notifications sent already)
-    if (decision.recoveryType === 'NOTIFY_CUSTOMER' && context.notification_count >= 2) {
-      return { approved: false, reason: "Duplicate notification blocked", finalAction: "ESCALATE" };
+      if (policy.rule_type === 'MAX_AUTO_AMOUNT') {
+        const threshold = params.threshold || 50000;
+        if (context.amount_at_risk > threshold && decision.recoveryType !== 'ESCALATE') {
+          return { approved: false, reason: "High-value payment requires manual escalation", finalAction: "ESCALATE" };
+        }
+      }
+
+      if (policy.rule_type === 'MAX_NOTIFICATIONS') {
+        const maxNotifications = params.max || 2;
+        if (decision.recoveryType === 'NOTIFY_CUSTOMER' && context.notification_count >= maxNotifications) {
+          return { approved: false, reason: "Notification limit reached", finalAction: "ESCALATE" };
+        }
+      }
     }
 
     // All rules passed, approve agent's decision

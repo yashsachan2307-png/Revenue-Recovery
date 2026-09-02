@@ -29,25 +29,18 @@ export function AgentConsolePage() {
     setAnalyzing(true);
     setAnalysisData(null);
     
-    // Simulate analyzing time or fetch real if endpoint exists
-    setTimeout(() => {
-      if (!isMounted) return;
-      // Mocking agent analysis for the console view
-      setAnalysisData({
-        agentDecision: {
-          reason: "BIN historically shows high success on 48h retry for this merchant category.",
-          recoveryType: "SMART_RETRY_DELAYED",
-          confidence: 87,
-          expectedOutcome: "High probability of capture"
-        },
-        policyResult: {
-          approved: true,
-          reason: "Within merchant retry limits and conforms to risk appetite.",
-          finalAction: "EXECUTE_RETRY"
-        }
+    fetch(`/api/recovery/cases/${selectedCaseId}/analyse`, { method: 'POST' })
+      .then(res => res.json())
+      .then(data => {
+        if (!isMounted) return;
+        setAnalysisData(data);
+        setAnalyzing(false);
+      })
+      .catch(err => {
+        if (!isMounted) return;
+        console.error(err);
+        setAnalyzing(false);
       });
-      setAnalyzing(false);
-    }, 1500);
 
     return () => { isMounted = false; };
   }, [selectedCaseId]);
@@ -110,34 +103,41 @@ export function AgentConsolePage() {
                   <span className="animate-pulse delay-150">{'>'} RUNNING RISK MODELS...</span>
                 </div>
               ) : analysisData ? (
-                <div className="flex flex-col gap-4">
-                  <div className="text-[#569cd6]">-- ANALYSIS COMPLETE --</div>
-                  
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[#4ec9b0]">Target ID:</span>
-                    <span>{selectedCaseId}</span>
+                analysisData.error ? (
+                  <div className="flex flex-col gap-2 text-[var(--color-failure)]">
+                    <span className="font-bold">ANALYSIS FAILED</span>
+                    <span>{analysisData.error}</span>
                   </div>
+                ) : (
+                  <div className="flex flex-col gap-4">
+                    <div className="text-[#569cd6]">-- ANALYSIS COMPLETE --</div>
+                    
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[#4ec9b0]">Target ID:</span>
+                      <span>{selectedCaseId}</span>
+                    </div>
 
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[#4ec9b0]">Diagnostic Reasoning:</span>
-                    <span>{analysisData.agentDecision.reason}</span>
-                  </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[#4ec9b0]">Diagnostic Reasoning:</span>
+                      <span>{analysisData.agentDecision?.reason}</span>
+                    </div>
 
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[#4ec9b0]">Proposed Vector:</span>
-                    <span className="text-[#ce9178]">"{analysisData.agentDecision.recoveryType}"</span>
-                  </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[#4ec9b0]">Proposed Vector:</span>
+                      <span className="text-[#ce9178]">"{analysisData.agentDecision?.recoveryType}"</span>
+                    </div>
 
-                  <div className="flex flex-col gap-1 mt-4">
-                    <span className="text-[#4ec9b0]">Confidence Metric:</span>
-                    <div className="flex items-center gap-4">
-                      <div className="h-2 w-48 bg-[#333] border border-[#555]">
-                        <div className="h-full bg-[#4ec9b0]" style={{ width: `${analysisData.agentDecision.confidence}%` }}></div>
+                    <div className="flex flex-col gap-1 mt-4">
+                      <span className="text-[#4ec9b0]">Confidence Metric:</span>
+                      <div className="flex items-center gap-4">
+                        <div className="h-2 w-48 bg-[#333] border border-[#555]">
+                          <div className="h-full bg-[#4ec9b0]" style={{ width: `${analysisData.agentDecision?.confidence || 0}%` }}></div>
+                        </div>
+                        <span>{analysisData.agentDecision?.confidence || 0}%</span>
                       </div>
-                      <span>{analysisData.agentDecision.confidence}%</span>
                     </div>
                   </div>
-                </div>
+                )
               ) : (
                 <div className="opacity-50">Select a case to begin analysis.</div>
               )}
@@ -154,23 +154,32 @@ export function AgentConsolePage() {
             <div className="flex-1 flex flex-col p-4 gap-6">
               {analyzing ? (
                 <div className="opacity-50 text-xs font-mono uppercase text-center mt-8">Waiting for agent output...</div>
-              ) : analysisData ? (
+              ) : analysisData && !analysisData.error ? (
                 <>
                   <div className="flex flex-col gap-4 p-4 border border-[var(--color-border-subtle)] bg-[var(--color-ink)]/5">
                     <div className="flex items-center gap-2 text-sm font-bold uppercase">
-                      {analysisData.policyResult.approved ? (
+                      {analysisData.policyResult?.approved ? (
                         <><CheckSquare className="h-5 w-5 text-[var(--color-success)]" /> Policy Cleared</>
                       ) : (
                         <><Terminal className="h-5 w-5 text-[var(--color-failure)]" /> Policy Blocked</>
                       )}
                     </div>
-                    <p className="text-sm opacity-80">{analysisData.policyResult.reason}</p>
+                    <p className="text-sm opacity-80">{analysisData.policyResult?.reason}</p>
                   </div>
 
                   <div className="mt-auto flex flex-col gap-4">
                     <h3 className="text-xs font-bold uppercase tracking-widest opacity-60">Required Action</h3>
                     <div className="flex flex-col gap-2">
-                      <button className="flex items-center justify-center gap-2 w-full py-3 bg-[var(--color-ink)] text-[var(--color-paper)] font-bold text-xs uppercase tracking-widest hover:opacity-90 transition-opacity">
+                      <button 
+                        onClick={() => {
+                          fetch(`/api/recovery/cases/${selectedCaseId}/action`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(analysisData)
+                          }).then(() => alert('Action executed!'));
+                        }}
+                        disabled={!analysisData.policyResult?.approved}
+                        className="flex items-center justify-center gap-2 w-full py-3 bg-[var(--color-ink)] text-[var(--color-paper)] font-bold text-xs uppercase tracking-widest hover:opacity-90 transition-opacity disabled:opacity-30 disabled:cursor-not-allowed">
                         <Play className="h-4 w-4" />
                         Execute Auto Strategy
                       </button>

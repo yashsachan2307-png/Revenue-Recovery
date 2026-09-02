@@ -1,9 +1,23 @@
 import * as React from "react"
 import { Sidebar } from "./Sidebar"
-import { Search, Bell, User, Calendar } from "lucide-react"
+import { Search, Bell, User, Calendar, X } from "lucide-react"
+import { useQuery } from "@tanstack/react-query"
+import { Drawer } from "../components/ui/Drawer"
 
 export function AppShell({ children, title }: { children: React.ReactNode; title: string }) {
+  const [showNotifications, setShowNotifications] = React.useState(false);
   const currentDate = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+
+  const { data: notifications } = useQuery({
+    queryKey: ['notifications'],
+    queryFn: async () => {
+      const res = await fetch('/api/notifications');
+      if (!res.ok) throw new Error('Failed to fetch notifications');
+      return res.json();
+    }
+  });
+
+  const unreadCount = notifications?.filter((n: any) => n.is_read === 0).length || 0;
 
   return (
     <div className="flex min-h-screen bg-[var(--color-paper)] text-[var(--color-ink)]">
@@ -33,9 +47,14 @@ export function AppShell({ children, title }: { children: React.ReactNode; title
               <Calendar className="h-3.5 w-3.5 opacity-70" />
               <span>{currentDate}</span>
             </div>
-            <button className="flex h-8 w-8 items-center justify-center border border-transparent hover:border-[var(--color-border-subtle)] transition-colors relative">
+            <button 
+              onClick={() => setShowNotifications(true)}
+              className="flex h-8 w-8 items-center justify-center border border-transparent hover:border-[var(--color-border-subtle)] transition-colors relative"
+            >
               <Bell className="h-4 w-4" />
-              <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-[var(--color-failure)]"></span>
+              {unreadCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-[var(--color-failure)]"></span>
+              )}
             </button>
             <button className="flex h-8 w-8 items-center justify-center border border-transparent hover:border-[var(--color-border-subtle)] transition-colors">
               <User className="h-4 w-4" />
@@ -48,6 +67,32 @@ export function AppShell({ children, title }: { children: React.ReactNode; title
           {children}
         </main>
       </div>
+
+      <Drawer
+        isOpen={showNotifications}
+        onClose={() => setShowNotifications(false)}
+        title="Notifications"
+        width="400px"
+      >
+        <div className="flex flex-col gap-4">
+          {(notifications || []).length === 0 ? (
+            <div className="text-sm font-mono opacity-50 uppercase text-center mt-8">No notifications</div>
+          ) : (
+            (notifications || []).map((n: any) => (
+              <div key={n.id} className={`flex flex-col gap-1 p-3 border ${n.is_read ? 'border-[var(--color-border-subtle)] opacity-70' : 'border-[var(--color-ink)] bg-[var(--color-ink)]/5'}`}>
+                <div className="flex justify-between items-start">
+                  <span className="font-bold text-xs uppercase tracking-wider">{n.title}</span>
+                  <span className="text-[10px] font-mono opacity-60">{new Date(n.created_at).toLocaleTimeString()}</span>
+                </div>
+                <p className="text-xs mt-1">{n.message}</p>
+                {n.case_id && (
+                  <span className="text-[10px] font-mono font-bold mt-2 opacity-70">CASE: {n.case_id}</span>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      </Drawer>
     </div>
   )
 }

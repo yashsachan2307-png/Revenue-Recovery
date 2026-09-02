@@ -64,49 +64,70 @@ export class LLMProvider {
 
   private static deterministicFallback(context: any): AgentDecision {
     const reason = context.failure_reason || 'UNKNOWN';
-    const attempt = context.attempt_number || 1;
 
     if (reason === 'insufficient_funds') {
       return {
         recoveryType: 'WAIT_AND_RETRY',
         confidence: 85,
-        reason: 'Insufficient funds typically resolve within a few days. Recommended to wait and retry.',
+        reason: 'Insufficient funds typically resolve within a few days. Recommended delayed retry.',
         urgency: 'LOW',
         expectedOutcome: 'Successful charge after funds are added',
         requiresEscalation: false
       };
     }
 
-    if (reason === 'card_expired' || reason === 'invalid_payment_method') {
+    if (reason === 'network_error') {
       return {
-        recoveryType: 'NOTIFY_CUSTOMER',
-        confidence: 95,
-        reason: 'Payment method is invalid or expired. Customer intervention required.',
+        recoveryType: 'WAIT_AND_RETRY',
+        confidence: 90,
+        reason: 'Network errors are transient. Immediate retry recommended.',
         urgency: 'HIGH',
-        expectedOutcome: 'Customer updates payment method',
+        expectedOutcome: 'Successful charge on immediate retry',
         requiresEscalation: false
       };
     }
 
-    if (attempt >= 3) {
+    if (reason === 'bank_timeout') {
       return {
-        recoveryType: 'ESCALATE',
-        confidence: 90,
-        reason: 'Max retries reached. Escalate to manual review.',
+        recoveryType: 'WAIT_AND_RETRY',
+        confidence: 80,
+        reason: 'Bank timeouts indicate temporary downtime. Delayed retry recommended.',
         urgency: 'MEDIUM',
-        expectedOutcome: 'Human review required',
-        requiresEscalation: true
+        expectedOutcome: 'Successful charge on delayed retry',
+        requiresEscalation: false
+      };
+    }
+
+    if (reason === 'authentication_failed') {
+      return {
+        recoveryType: 'NOTIFY_CUSTOMER',
+        confidence: 95,
+        reason: 'Customer verification required due to failed authentication.',
+        urgency: 'HIGH',
+        expectedOutcome: 'Customer completes 3DS/verification',
+        requiresEscalation: false
+      };
+    }
+
+    if (reason === 'card_declined' || reason === 'expired_card') {
+      return {
+        recoveryType: 'RETRY_ALTERNATIVE_METHOD',
+        confidence: 90,
+        reason: 'Card was declined. Request alternate payment method.',
+        urgency: 'HIGH',
+        expectedOutcome: 'Customer provides new payment method',
+        requiresEscalation: false
       };
     }
 
     // Default
     return {
-      recoveryType: 'WAIT_AND_RETRY',
+      recoveryType: 'ESCALATE',
       confidence: 70,
-      reason: 'Temporary failure assumed. Safe to retry.',
+      reason: 'Unknown failure reason. Safe escalation.',
       urgency: 'MEDIUM',
-      expectedOutcome: 'Successful retry',
-      requiresEscalation: false
+      expectedOutcome: 'Human review required',
+      requiresEscalation: true
     };
   }
 }

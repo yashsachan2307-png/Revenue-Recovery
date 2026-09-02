@@ -1,7 +1,8 @@
 import express from "express";
 import cors from "cors";
-import { router } from "./api/routes";
+import { apiRouter } from "./api/routes";
 import { initDb } from "./database";
+import { SchedulerService } from "./services/SchedulerService";
 
 const app = express();
 const port = 3001;
@@ -12,7 +13,10 @@ app.use(express.json());
 // Initialize DB schema (if not exists)
 initDb();
 
-app.use("/api", router);
+// Start background scheduler
+SchedulerService.start(10000);
+
+app.use("/api", apiRouter);
 
 app.listen(port, () => {
   console.log(`Backend listening on port ${port}`);

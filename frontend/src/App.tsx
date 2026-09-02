@@ -7,6 +7,9 @@ import { RecoveriesPage } from "./pages/RecoveriesPage"
 import { AgentConsolePage } from "./pages/AgentConsolePage"
 import { AuditLogPage } from "./pages/AuditLogPage"
 import { ReportsPage } from "./pages/ReportsPage"
+import { EvaluationsPage } from "./pages/EvaluationsPage"
+import { SettingsPage } from "./pages/SettingsPage"
+import { WorkflowsPage } from "./pages/WorkflowsPage"
 
 function App() {
   return (
@@ -19,6 +22,9 @@ function App() {
       <Route path="/agent" element={<AgentConsolePage />} />
       <Route path="/audit-log" element={<AuditLogPage />} />
       <Route path="/reports" element={<ReportsPage />} />
+      <Route path="/evaluations" element={<EvaluationsPage />} />
+      <Route path="/workflows" element={<WorkflowsPage />} />
+      <Route path="/settings" element={<SettingsPage />} />
     </Routes>
   )
 }

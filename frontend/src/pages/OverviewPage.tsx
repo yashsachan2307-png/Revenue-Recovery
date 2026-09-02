@@ -5,7 +5,7 @@ import { MetricBlock } from "../components/ui/MetricBlock"
 import { api, type Transaction } from "../lib/api"
 import { formatCurrency } from "../lib/utils"
 import { Drawer } from "../components/ui/Drawer"
-import { ChevronRight } from "lucide-react"
+import { ChevronRight, AlertCircle, Clock, Bell } from "lucide-react"
 
 export function OverviewPage() {
   const [selectedIncident, setSelectedIncident] = React.useState<Transaction | null>(null);
@@ -36,7 +36,7 @@ export function OverviewPage() {
     );
   };
 
-  const { metrics, recentIncidents, failureDistribution, topCustomers } = data || {};
+  const { metrics, recentIncidents, failureDistribution, topCustomers, needsAttention } = data || {};
 
   return (
     <AppShell title="Overview">
@@ -46,6 +46,28 @@ export function OverviewPage() {
         </div>
       ) : (
         <div className="flex flex-col gap-8 max-w-7xl mx-auto">
+          
+          {/* Needs Attention Widget */}
+          {(needsAttention?.notifications?.length > 0 || needsAttention?.pendingJobsCount > 0) && (
+            <div className="flex flex-col gap-2 border border-[var(--color-warning)] bg-[var(--color-warning)]/10 p-4">
+              <div className="flex items-center gap-2 text-[var(--color-warning)] text-xs font-bold uppercase tracking-wider mb-2">
+                <AlertCircle className="h-4 w-4" /> Needs Attention
+              </div>
+              <div className="flex items-center gap-6">
+                {needsAttention?.pendingJobsCount > 0 && (
+                  <div className="flex items-center gap-2 font-mono text-sm">
+                    <Clock className="h-4 w-4 opacity-70" /> {needsAttention.pendingJobsCount} scheduled jobs pending
+                  </div>
+                )}
+                {needsAttention?.notifications?.length > 0 && (
+                  <div className="flex items-center gap-2 font-mono text-sm">
+                    <Bell className="h-4 w-4 opacity-70" /> {needsAttention.notifications.length} unread alerts
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Executive KPIs */}
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
             <MetricBlock

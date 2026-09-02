@@ -32,13 +32,16 @@ export function Sidebar() {
     { name: "Recoveries", path: "/recoveries" },
     { name: "Customers", path: "/customers" },
     { name: "Agent Console", path: "/agent" },
+    { name: "Workflows", path: "/workflows" },
     { name: "Audit Log", path: "/audit-log" },
     { name: "Reports", path: "/reports" },
+    { name: "Evaluations", path: "/evaluations" },
+    { name: "Settings", path: "/settings" },
   ]
 
   return (
-    <div className="flex h-screen w-64 flex-col border-r border-[var(--color-border-subtle)] bg-[var(--color-paper)] p-4">
-      <div className="mb-8 flex items-center gap-2">
+    <div className="flex h-screen w-64 flex-col border-r border-[var(--color-border-subtle)] bg-[var(--color-paper)] p-4 overflow-y-auto">
+      <div className="mb-8 flex items-center gap-2 shrink-0">
         <Terminal className="h-6 w-6" />
         <div className="flex flex-col">
           <span className="text-sm font-black tracking-widest">REVENUE//</span>
@@ -62,10 +65,7 @@ export function Sidebar() {
         ))}
       </nav>
 
-      <div className="mt-auto space-y-4 pt-4 border-t border-[var(--color-border-subtle)]">
-        <a href="#" className="block px-3 py-2 text-sm font-bold uppercase tracking-wider text-[var(--color-ink)] hover:underline">
-          Settings
-        </a>
+      <div className="mt-auto space-y-4 pt-4 border-t border-[var(--color-border-subtle)] shrink-0">
         <div className="flex items-center justify-between px-3">
           <span className="text-xs font-bold uppercase">Mode</span>
           <button
