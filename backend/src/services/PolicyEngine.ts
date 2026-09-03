@@ -32,13 +32,13 @@ export class PolicyEngine {
   static evaluateContext(context: any, decision: AgentDecision): PolicyResult {
     // 1. Hard constraints (Always on)
     if (context.status === 'recovered') {
-      return { approved: false, reason: "Already recovered", finalAction: "STOP" };
+      return { approved: false, reason: "Already recovered", finalAction: "Stop Recovery" };
     }
 
     const paymentDate = new Date(context.created_at || new Date());
     const daysOld = (new Date().getTime() - paymentDate.getTime()) / (1000 * 3600 * 24);
     if (daysOld > 30) {
-      return { approved: false, reason: "Payment too old (>30 days)", finalAction: "STOP" };
+      return { approved: false, reason: "Payment too old (>30 days)", finalAction: "Stop Recovery" };
     }
 
     // 2. Dynamic Policies
@@ -49,22 +49,22 @@ export class PolicyEngine {
       
       if (policy.rule_type === 'MAX_RETRIES') {
         const maxRetries = params.max || 3;
-        if (decision.recoveryType === 'WAIT_AND_RETRY' && context.attempt_number >= maxRetries) {
-          return { approved: false, reason: "Max retry limit reached", finalAction: "ESCALATE" };
+        if (decision.recommendedStrategy === 'Wait & Retry' && context.attempt_number >= maxRetries) {
+          return { approved: false, reason: "Max retry limit reached", finalAction: "Escalate" };
         }
       }
 
       if (policy.rule_type === 'MAX_AUTO_AMOUNT') {
         const threshold = params.threshold || 50000;
-        if (context.amount_at_risk > threshold && decision.recoveryType !== 'ESCALATE') {
-          return { approved: false, reason: "High-value payment requires manual escalation", finalAction: "ESCALATE" };
+        if (context.amount_at_risk > threshold && decision.recommendedStrategy !== 'Escalate') {
+          return { approved: false, reason: "High-value payment requires manual escalation", finalAction: "Escalate" };
         }
       }
 
       if (policy.rule_type === 'MAX_NOTIFICATIONS') {
         const maxNotifications = params.max || 2;
-        if (decision.recoveryType === 'NOTIFY_CUSTOMER' && context.notification_count >= maxNotifications) {
-          return { approved: false, reason: "Notification limit reached", finalAction: "ESCALATE" };
+        if (decision.recommendedStrategy === 'Notify Customer' && context.notification_count >= maxNotifications) {
+          return { approved: false, reason: "Notification limit reached", finalAction: "Stop Recovery" };
         }
       }
     }
@@ -73,7 +73,7 @@ export class PolicyEngine {
     return {
       approved: true,
       reason: "All policies passed",
-      finalAction: decision.recoveryType
+      finalAction: decision.recommendedStrategy
     };
   }
 }

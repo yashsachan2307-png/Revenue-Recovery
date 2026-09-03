@@ -2,60 +2,87 @@ import { db } from '../database';
 
 export class AnalyticsEngine {
   
-  static getAdvancedMetrics(timeRangeDays: number = 30) {
-    const timeFilter = new Date(Date.now() - timeRangeDays * 24 * 60 * 60 * 1000).toISOString();
-
-    const failureBreakdown = db.prepare(`
-      SELECT failure_reason, COUNT(*) as count, SUM(amount) as total_amount
-      FROM payments
-      WHERE timestamp >= ? AND status = 'FAILED'
-      GROUP BY failure_reason
-      ORDER BY total_amount DESC
-    `).all(timeFilter);
-
-    const methodBreakdown = db.prepare(`
-      SELECT payment_method, COUNT(*) as count, SUM(amount) as total_amount
-      FROM payments
-      WHERE timestamp >= ? AND status = 'FAILED'
-      GROUP BY payment_method
-      ORDER BY total_amount DESC
-    `).all(timeFilter);
-
-    const bankBreakdown = db.prepare(`
-      SELECT bank, COUNT(*) as count, SUM(amount) as total_amount
-      FROM payments
-      WHERE timestamp >= ? AND status = 'FAILED' AND bank IS NOT NULL
-      GROUP BY bank
-      ORDER BY total_amount DESC
-    `).all(timeFilter);
-
-    // Cohorts by customer risk profile
-    const riskCohorts = db.prepare(`
-      SELECT risk_level, COUNT(*) as failed_payments, SUM(amount) as total_amount
-      FROM payments
-      WHERE timestamp >= ? AND status = 'FAILED'
-      GROUP BY risk_level
-      ORDER BY total_amount DESC
-    `).all(timeFilter);
-
-    // Get time series data for the trend
+  static getAdvancedMetrics(startDate: string, endDate: string) {
+    // Trend Data: Daily aggregation of recovered vs failed
     const trendData = db.prepare(`
       SELECT 
-        date(timestamp) as day,
-        SUM(amount) as amount_at_risk,
-        COUNT(*) as failures
+        date(created_at) as day,
+        SUM(CASE WHEN status = 'recovered' THEN amount ELSE 0 END) as recovered_amount,
+        SUM(CASE WHEN status = 'failed' THEN amount ELSE 0 END) as failed_amount,
+        SUM(CASE WHEN status = 'recovered' THEN 1 ELSE 0 END) as recovered_count,
+        SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed_count,
+        COUNT(*) as total_attempts
       FROM payments
-      WHERE timestamp >= ? AND status = 'FAILED'
+      WHERE created_at >= ? AND created_at <= ? AND status IN ('recovered', 'failed')
       GROUP BY day
       ORDER BY day ASC
-    `).all(timeFilter);
+    `).all(startDate, endDate);
+
+    // Method Breakdown
+    const methodBreakdown = db.prepare(`
+      SELECT 
+        payment_method as category, 
+        SUM(CASE WHEN status = 'recovered' THEN amount ELSE 0 END) as recovered_amount,
+        SUM(CASE WHEN status = 'failed' THEN amount ELSE 0 END) as failed_amount
+      FROM payments
+      WHERE created_at >= ? AND created_at <= ? AND status IN ('recovered', 'failed')
+      GROUP BY payment_method
+    `).all(startDate, endDate);
+
+    // Bank Breakdown
+    const bankBreakdown = db.prepare(`
+      SELECT 
+        COALESCE(bank, 'Unknown') as category, 
+        SUM(CASE WHEN status = 'recovered' THEN amount ELSE 0 END) as recovered_amount,
+        SUM(CASE WHEN status = 'failed' THEN amount ELSE 0 END) as failed_amount
+      FROM payments
+      WHERE created_at >= ? AND created_at <= ? AND status IN ('recovered', 'failed')
+      GROUP BY COALESCE(bank, 'Unknown')
+      ORDER BY recovered_amount DESC, failed_amount DESC
+    `).all(startDate, endDate);
+
+    // Failure Breakdown
+    const failureBreakdown = db.prepare(`
+      SELECT 
+        COALESCE(failure_reason, 'Unknown') as category, 
+        SUM(CASE WHEN status = 'recovered' THEN amount ELSE 0 END) as recovered_amount,
+        SUM(CASE WHEN status = 'failed' THEN amount ELSE 0 END) as failed_amount
+      FROM payments
+      WHERE created_at >= ? AND created_at <= ? AND status IN ('recovered', 'failed')
+      GROUP BY COALESCE(failure_reason, 'Unknown')
+    `).all(startDate, endDate);
+
+    // Strategy Performance
+    const strategyPerformance = db.prepare(`
+      SELECT 
+        COALESCE(r.recommended_action, 'WAIT_AND_RETRY') as category,
+        SUM(CASE WHEN p.status = 'recovered' THEN p.amount ELSE 0 END) as recovered_amount,
+        SUM(CASE WHEN p.status = 'failed' THEN p.amount ELSE 0 END) as failed_amount
+      FROM payments p
+      LEFT JOIN recovery_opportunities r ON p.id = r.payment_id
+      WHERE p.created_at >= ? AND p.created_at <= ? AND p.status IN ('recovered', 'failed')
+      GROUP BY category
+    `).all(startDate, endDate);
+
+    // Customer Segment Recovery (Risk Level)
+    const segmentRecovery = db.prepare(`
+      SELECT 
+        c.risk_level as category,
+        SUM(CASE WHEN p.status = 'recovered' THEN p.amount ELSE 0 END) as recovered_amount,
+        SUM(CASE WHEN p.status = 'failed' THEN p.amount ELSE 0 END) as failed_amount
+      FROM payments p
+      JOIN customers c ON p.customer_id = c.id
+      WHERE p.created_at >= ? AND p.created_at <= ? AND p.status IN ('recovered', 'failed')
+      GROUP BY c.risk_level
+    `).all(startDate, endDate);
 
     return {
-      failureBreakdown,
+      trendData,
       methodBreakdown,
       bankBreakdown,
-      riskCohorts,
-      trendData
+      failureBreakdown,
+      strategyPerformance,
+      segmentRecovery
     };
   }
 

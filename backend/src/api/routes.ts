@@ -7,8 +7,14 @@ import { AnalyticsEngine } from '../services/AnalyticsEngine';
 import { NotificationService } from '../services/NotificationService';
 import { RecoveryOpportunityService } from "../services/RecoveryOpportunityService";
 import { RevenueIntelligenceService } from "../services/RevenueIntelligenceService";
+import { authRouter } from './authRoutes';
+import { seedDatabase } from '../database/seed';
+import crypto from 'crypto';
 
 const router = Router();
+
+// Mount Auth Sub-router
+router.use('/auth', authRouter);
 
 router.get("/health", (req, res) => {
   res.json({ status: "ok" });
@@ -19,11 +25,11 @@ router.get("/dashboard/summary", (req, res) => {
   try {
     const timeFilter = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
-    const activeCasesResult = db.prepare(`SELECT count(*) as count FROM payments WHERE status = 'FAILED' AND timestamp >= ?`).get(timeFilter) as { count: number };
-    const recoveredResult = db.prepare(`SELECT sum(amount) as total FROM payments WHERE status = 'RECOVERED' AND timestamp >= ?`).get(timeFilter) as { total: number };
-    const atRiskResult = db.prepare(`SELECT sum(amount) as total FROM payments WHERE status = 'FAILED' AND timestamp >= ?`).get(timeFilter) as { total: number };
-    const totalFailed = db.prepare(`SELECT count(*) as count FROM payments WHERE (status = 'FAILED' OR status = 'RECOVERED') AND timestamp >= ?`).get(timeFilter) as { count: number };
-    const recoveredCount = db.prepare(`SELECT count(*) as count FROM payments WHERE status = 'RECOVERED' AND timestamp >= ?`).get(timeFilter) as { count: number };
+    const activeCasesResult = db.prepare(`SELECT count(*) as count FROM payments WHERE status = 'FAILED' AND created_at >= ?`).get(timeFilter) as { count: number };
+    const recoveredResult = db.prepare(`SELECT sum(amount) as total FROM payments WHERE status = 'RECOVERED' AND created_at >= ?`).get(timeFilter) as { total: number };
+    const atRiskResult = db.prepare(`SELECT sum(amount) as total FROM payments WHERE status = 'FAILED' AND created_at >= ?`).get(timeFilter) as { total: number };
+    const totalFailed = db.prepare(`SELECT count(*) as count FROM payments WHERE (status = 'FAILED' OR status = 'RECOVERED') AND created_at >= ?`).get(timeFilter) as { count: number };
+    const recoveredCount = db.prepare(`SELECT count(*) as count FROM payments WHERE status = 'RECOVERED' AND created_at >= ?`).get(timeFilter) as { count: number };
     
     const recoveryRate = totalFailed.count > 0 ? ((recoveredCount.count / totalFailed.count) * 100).toFixed(1) : 0;
 
@@ -37,23 +43,24 @@ router.get("/dashboard/summary", (req, res) => {
     const recentIncidents = db.prepare(`
       SELECT * FROM payments 
       WHERE status = 'FAILED' 
-      ORDER BY timestamp DESC 
+      ORDER BY created_at DESC 
       LIMIT 10
     `).all();
 
     const failureDistribution = db.prepare(`
       SELECT failure_reason as category, sum(amount) as total_amount
       FROM payments
-      WHERE status = 'FAILED' AND timestamp >= ?
+      WHERE status = 'FAILED' AND created_at >= ?
       GROUP BY failure_reason
       ORDER BY total_amount DESC
     `).all(timeFilter);
 
     const topCustomers = db.prepare(`
-      SELECT customer as name, count(*) as opportunity_count, sum(amount) as revenue_at_risk
-      FROM payments
-      WHERE status = 'FAILED' AND timestamp >= ?
-      GROUP BY customer
+      SELECT c.name as name, count(*) as opportunity_count, sum(p.amount) as revenue_at_risk
+      FROM payments p
+      JOIN customers c ON p.customer_id = c.id
+      WHERE p.status = 'FAILED' AND p.created_at >= ?
+      GROUP BY c.id
       ORDER BY revenue_at_risk DESC
       LIMIT 5
     `).all(timeFilter);
@@ -314,17 +321,29 @@ router.post('/notifications/:id/read', (req: Request, res: Response) => {
   }
 });
 
-// Legacy backward-compat aliases for frontend while we migrate
+// GET /api/overview
 router.get("/overview", (req, res) => {
   try {
     RecoveryOpportunityService.generateOpportunities();
     const metrics = RevenueIntelligenceService.getOverviewMetrics();
-    const recentIncidents = db.prepare(`SELECT p.*, r.recommended_action, r.status as recovery_status, r.severity, c.name as customer_name FROM payments p LEFT JOIN recovery_opportunities r ON p.id = r.payment_id JOIN customers c ON p.customer_id = c.id WHERE p.status = 'failed' ORDER BY p.created_at DESC LIMIT 10`).all();
+    const recentIncidents = db.prepare(`
+      SELECT p.*, r.recommended_action, r.status as recovery_status, r.severity, c.name as customer_name 
+      FROM payments p 
+      LEFT JOIN recovery_opportunities r ON p.id = r.payment_id 
+      JOIN customers c ON p.customer_id = c.id 
+      WHERE p.status = 'failed' 
+      ORDER BY p.created_at DESC 
+      LIMIT 10
+    `).all();
     const failureDistribution = RevenueIntelligenceService.getFailureDistribution();
     const riskDistribution = RevenueIntelligenceService.getRiskDistribution();
     const topCustomers = RevenueIntelligenceService.getTopCustomersByRisk(6);
     
-    // Inject NeedsAttention for the Overview page via the legacy endpoint as well
+    // Dynamic database-driven trend and payment method distribution (no hardcoded frontend data!)
+    const trendData = RevenueIntelligenceService.getTrendMetrics(7);
+    const methodData = RevenueIntelligenceService.getMethodDistribution();
+
+    // NeedsAttention
     const unreadNotifications = NotificationService.getUnread();
     const pendingJobs = db.prepare(`SELECT count(*) as count FROM scheduled_jobs WHERE status = 'PENDING'`).get() as { count: number };
 
@@ -334,11 +353,183 @@ router.get("/overview", (req, res) => {
       failureDistribution, 
       riskDistribution, 
       topCustomers,
+      trendData,
+      methodData,
       needsAttention: {
         notifications: unreadNotifications,
         pendingJobsCount: pendingJobs.count
       }
     });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/recovery/stats
+router.get("/recovery/stats", (req, res) => {
+  try {
+    const stats = db.prepare(`
+      SELECT 
+        SUM(amount_at_risk) as totalOpportunity,
+        SUM(CASE WHEN status = 'recovered' THEN amount_at_risk ELSE 0 END) as recovered,
+        SUM(CASE WHEN status NOT IN ('recovered', 'failed') THEN amount_at_risk ELSE 0 END) as inProgress,
+        SUM(CASE WHEN status = 'failed' THEN amount_at_risk ELSE 0 END) as failed,
+        COUNT(*) as totalCases,
+        SUM(CASE WHEN status = 'recovered' THEN 1 ELSE 0 END) as recoveredCount,
+        SUM(CASE WHEN status NOT IN ('recovered', 'failed') THEN 1 ELSE 0 END) as inProgressCount,
+        SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failedCount
+      FROM recovery_opportunities
+    `).get() as any;
+
+    const totalOpp = stats?.totalOpportunity || 0;
+    const recoveredAmt = stats?.recovered || 0;
+    const recoveryRate = totalOpp > 0 ? Math.round((recoveredAmt / totalOpp) * 100 * 10) / 10 : 0;
+
+    res.json({
+      totalOpportunity: Math.round(totalOpp),
+      recovered: Math.round(recoveredAmt),
+      inProgress: Math.round(stats?.inProgress || 0),
+      failed: Math.round(stats?.failed || 0),
+      recoveryRate,
+      totalCases: stats?.totalCases || 0,
+      recoveredCount: stats?.recoveredCount || 0,
+      inProgressCount: stats?.inProgressCount || 0,
+      failedCount: stats?.failedCount || 0
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/agent/decisions
+router.get("/agent/decisions", (req, res) => {
+  try {
+    const limit = parseInt((req.query.limit as string) || '50', 10);
+    const decisions = db.prepare(`
+      SELECT 
+        a.*, 
+        p.amount, 
+        p.currency, 
+        p.failure_reason,
+        p.payment_method,
+        p.bank,
+        c.name as customer_name,
+        c.email as customer_email,
+        r.category,
+        r.severity,
+        r.status as recovery_status,
+        r.recommended_action
+      FROM audit_logs a
+      JOIN payments p ON a.payment_id = p.id
+      LEFT JOIN recovery_opportunities r ON a.recovery_opportunity_id = r.id
+      LEFT JOIN customers c ON p.customer_id = c.id
+      ORDER BY a.created_at DESC
+      LIMIT ?
+    `).all(limit);
+    res.json(decisions);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/analytics
+router.get("/analytics", (req, res) => {
+  try {
+    const days = parseInt((req.query.days as string) || '30', 10);
+    let startDate = req.query.startDate as string;
+    let endDate = req.query.endDate as string;
+    
+    if (!startDate || !endDate) {
+      endDate = new Date().toISOString();
+      startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+    }
+    
+    const analytics = AnalyticsEngine.getAdvancedMetrics(startDate, endDate);
+    res.json(analytics);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/merchant/profile
+router.get("/merchant/profile", (req, res) => {
+  try {
+    const merchant = db.prepare(`SELECT * FROM merchants LIMIT 1`).get();
+    const users = db.prepare(`SELECT id, merchant_id, name, email, role, created_at FROM users`).all();
+    res.json({ merchant, users });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PUT /api/merchant/profile
+router.put("/merchant/profile", (req, res) => {
+  try {
+    const { name, currency } = req.body;
+    const merchant = db.prepare(`SELECT id FROM merchants LIMIT 1`).get() as any;
+    if (merchant) {
+      db.prepare(`UPDATE merchants SET name = COALESCE(?, name), currency = COALESCE(?, currency) WHERE id = ?`)
+        .run(name || null, currency || null, merchant.id);
+    }
+    const updated = db.prepare(`SELECT * FROM merchants WHERE id = ?`).get(merchant.id);
+    res.json({ success: true, merchant: updated });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Phase 8: Webhook Simulation & Demo Reset
+router.post("/webhooks/payment", (req: Request, res: Response) => {
+  try {
+    const { event, payload } = req.body;
+    
+    if (event === 'payment.failed') {
+      const paymentId = `PAY-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+      
+      const customerId = payload.customer_id || `CUS-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+      db.prepare(`
+        INSERT INTO customers (id, merchant_id, name, email, risk_level, created_at) 
+        VALUES (?, 'M-IND-001', 'Demo Webhook User', 'webhook.customer@example.test', 'MEDIUM', ?)
+        ON CONFLICT(id) DO NOTHING
+      `).run(customerId, new Date().toISOString());
+
+      db.prepare(`
+        INSERT INTO payments (id, merchant_id, customer_id, amount, currency, status, payment_method, failure_reason, attempt_number, created_at, updated_at)
+        VALUES (?, 'M-IND-001', ?, ?, ?, 'failed', 'upi', ?, 1, ?, ?)
+      `).run(paymentId, customerId, payload.amount || 25000, payload.currency || 'INR', payload.failure_reason || 'INSUFFICIENT_FUNDS', new Date().toISOString(), new Date().toISOString());
+
+      RecoveryOpportunityService.generateOpportunities();
+
+      db.prepare(`
+        INSERT INTO audit_logs (id, recovery_opportunity_id, payment_id, action, result, reason, confidence, actor, created_at)
+        VALUES (?, '', ?, 'WEBHOOK_RECEIVED', 'SUCCESS', ?, 1.0, 'WEBHOOK', ?)
+      `).run(`AUD-${crypto.randomUUID().slice(0, 8).toUpperCase()}`, paymentId, `Received ${event} via Razorpay simulated webhook`, new Date().toISOString());
+      
+      NotificationService.create({
+        type: 'SYSTEM',
+        title: 'Payment Failure Ingested',
+        message: `Payment failure event processed for ${customerId}`
+      });
+    }
+
+    res.json({ success: true, received: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post("/system/reset-demo", (req: Request, res: Response) => {
+  try {
+    // Perform a complete fresh seed of synthetic Indian merchant data
+    seedDatabase();
+
+    NotificationService.create({
+      type: 'SYSTEM',
+      title: 'Demo Environment Reset',
+      message: 'Demo merchant environment has been refreshed with synthetic Indian merchant data.'
+    });
+
+    res.json({ success: true, message: "Demo environment has been reset and reseeded successfully." });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

@@ -31,15 +31,11 @@ export class SchedulerService {
 
     if (pendingJobs.length === 0) return;
 
-    console.log(`[Scheduler] Processing ${pendingJobs.length} due jobs...`);
-
     const updateStatus = db.prepare(`UPDATE scheduled_jobs SET status = ?, result = ? WHERE id = ?`);
 
     db.transaction(() => {
       for (const job of pendingJobs) {
         // Simulate execution
-        console.log(`[Scheduler] Executing Job ${job.id}: ${job.action} on Case ${job.case_id}`);
-        
         // In a real system, we would dispatch the action. 
         // For now, mark as COMPLETED.
         updateStatus.run('COMPLETED', 'Executed successfully by scheduler', job.id);

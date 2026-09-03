@@ -29,9 +29,9 @@ export class RecoveryOpportunityService {
         if (p.amount > 5000) severity = "MEDIUM";
         if (p.amount > 15000) severity = "HIGH";
 
-        let recommendedAction = "WAIT_AND_RETRY";
-        if (category === "CUSTOMER_FUNDS") recommendedAction = "NOTIFY_CUSTOMER_FUNDS";
-        if (category === "PAYMENT_METHOD") recommendedAction = "REQUEST_NEW_PAYMENT_METHOD";
+        let recommendedAction = "Wait & Retry";
+        if (category === "CUSTOMER_FUNDS") recommendedAction = "Notify Customer";
+        if (category === "PAYMENT_METHOD") recommendedAction = "Alternative Payment Method";
 
         insertOpp.run(
           `REC-${crypto.randomUUID().slice(0,8).toUpperCase()}`,

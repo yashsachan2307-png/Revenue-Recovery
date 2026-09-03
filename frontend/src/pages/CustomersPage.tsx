@@ -1,20 +1,20 @@
 import * as React from "react"
 import { useQuery } from "@tanstack/react-query"
 import { AppShell } from "../layouts/AppShell"
+import { ErrorState } from "../components/ui/ErrorState"
+import { EmptyState } from "../components/ui/EmptyState"
 import { api } from "../lib/api"
 import { formatCurrency } from "../lib/utils"
-import { Search, User, Mail, Phone, CreditCard, AlertTriangle, ShieldCheck } from "lucide-react"
+import { Search, User, Mail, Phone, CreditCard, AlertTriangle, ShieldCheck, History } from "lucide-react"
 
 export function CustomersPage() {
   const [selectedCustomerId, setSelectedCustomerId] = React.useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = React.useState("");
 
-  const { data: customers = [], isLoading: loading, isError } = useQuery({
+  const { data: customers = [], isLoading: loading, isError, error, refetch } = useQuery({
     queryKey: ['customers'],
     queryFn: () => api.getCustomers()
-  })
-
-  // We need to fetch specific customer history here if backend supported it, but we'll use mock data derived from the customer for now
-  const selectedCustomer = customers.find((c: any) => c.id === selectedCustomerId);
+  });
 
   React.useEffect(() => {
     if (customers.length > 0 && !selectedCustomerId) {
@@ -22,21 +22,46 @@ export function CustomersPage() {
     }
   }, [customers, selectedCustomerId]);
 
+  // Fetch real customer payment history & recovery opportunities from database
+  const { data: customerDetails, isLoading: loadingDetails } = useQuery({
+    queryKey: ['customer-detail', selectedCustomerId],
+    queryFn: () => selectedCustomerId ? api.getCustomerDetails(selectedCustomerId) : null,
+    enabled: !!selectedCustomerId
+  });
+
   if (isError) {
     return (
       <AppShell title="Customers">
-        <div className="flex h-64 items-center justify-center font-mono text-sm uppercase text-[var(--color-failure)]">
-          [ SYSTEM ERROR: Failed to load data ]
+        <div className="max-w-4xl mx-auto p-6">
+          <ErrorState
+            title="Failed to load customer registry"
+            message={error instanceof Error ? error.message : "Unable to retrieve customers."}
+            onRetry={() => refetch()}
+          />
         </div>
       </AppShell>
     );
   }
 
+  const filteredCustomers = customers.filter((c: any) => 
+    c.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    c.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    c.id?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const customer = customerDetails?.customer || customers.find((c: any) => c.id === selectedCustomerId);
+  const payments = customerDetails?.payments || [];
+  const opportunities = customerDetails?.opportunities || [];
+
+  const recoveryRate = customer?.failed_payments > 0 
+    ? Math.round(((opportunities.filter((o: any) => o.status === 'recovered').length) / customer.failed_payments) * 100) 
+    : 100;
+
   return (
     <AppShell title="Customers">
       {loading ? (
-        <div className="flex h-64 items-center justify-center font-mono text-sm uppercase tracking-widest opacity-50">
-          Loading Data...
+        <div className="flex h-64 items-center justify-center font-mono text-xs uppercase tracking-widest opacity-50">
+          Loading Customer Registry...
         </div>
       ) : (
         <div className="flex h-[calc(100vh-8rem)] border border-[var(--color-border-subtle)] bg-[var(--color-paper)]">
@@ -48,131 +73,150 @@ export function CustomersPage() {
                 <Search className="absolute left-2 h-4 w-4" />
                 <input 
                   type="text" 
-                  placeholder="Search customers..." 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search by name, email, ID..." 
                   className="h-8 w-full rounded-none border border-[var(--color-border-subtle)] bg-transparent pl-8 pr-3 text-xs focus:border-[var(--color-ink)] focus:outline-none transition-colors"
                 />
               </div>
             </div>
             <div className="flex-1 overflow-y-auto">
-              {customers.map((c: any) => (
-                <div 
-                  key={c.id}
-                  onClick={() => setSelectedCustomerId(c.id)}
-                  className={`p-4 border-b border-[var(--color-border-subtle)] cursor-pointer transition-colors hover:bg-[var(--color-ink)]/5 ${selectedCustomerId === c.id ? 'bg-[var(--color-ink)]/10 border-l-4 border-l-[var(--color-ink)]' : 'border-l-4 border-l-transparent'}`}
-                >
-                  <div className="flex justify-between items-start">
-                    <div className="flex flex-col">
-                      <span className="font-bold text-sm">{c.name}</span>
-                      <span className="font-mono text-xs opacity-70 mt-1">{c.id}</span>
+              {filteredCustomers.length === 0 ? (
+                <EmptyState title="No match" message="No customer matches your search." className="m-4" />
+              ) : (
+                filteredCustomers.map((c: any) => {
+                  const risk = c.risk_level?.toLowerCase() || 'low';
+                  const isSelected = selectedCustomerId === c.id;
+                  return (
+                    <div 
+                      key={c.id}
+                      onClick={() => setSelectedCustomerId(c.id)}
+                      className={`p-4 border-b border-[var(--color-border-subtle)] cursor-pointer transition-colors hover:bg-[var(--color-ink)]/5 ${isSelected ? 'bg-[var(--color-ink)]/10 border-l-4 border-l-[var(--color-ink)]' : 'border-l-4 border-l-transparent'}`}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div className="flex flex-col">
+                          <span className="font-bold text-sm">{c.name}</span>
+                          <span className="font-mono text-[11px] opacity-60 mt-0.5">{c.email}</span>
+                          <span className="font-mono text-[10px] opacity-40 mt-0.5">{c.id}</span>
+                        </div>
+                        <span className={`text-[10px] font-bold uppercase tracking-wider ${risk === 'high' ? 'text-[var(--color-failure)]' : risk === 'medium' ? 'text-[var(--color-warning)]' : 'text-[var(--color-success)]'}`}>
+                          {risk} Risk
+                        </span>
+                      </div>
                     </div>
-                    <span className={`text-xs font-bold uppercase ${c.risk_score > 70 ? 'text-[var(--color-failure)]' : c.risk_score > 40 ? 'text-[var(--color-warning)]' : 'text-[var(--color-success)]'}`}>
-                      {c.risk_score > 70 ? 'High' : c.risk_score > 40 ? 'Med' : 'Low'} Risk
-                    </span>
-                  </div>
-                </div>
-              ))}
+                  );
+                })
+              )}
             </div>
           </div>
 
           {/* Right: Customer Profile */}
           <div className="flex-1 flex flex-col bg-[var(--color-paper)] overflow-y-auto">
-            {selectedCustomer ? (
+            {customer ? (
               <div className="p-8 flex flex-col gap-8">
                 
                 {/* Header info */}
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-4">
-                    <div className="h-16 w-16 bg-[var(--color-ink)]/10 border border-[var(--color-border-subtle)] flex items-center justify-center">
-                      <User className="h-8 w-8 opacity-50" />
+                    <div className="h-14 w-14 bg-[var(--color-ink)]/5 border border-[var(--color-border-subtle)] flex items-center justify-center">
+                      <User className="h-7 w-7 opacity-60 text-[var(--color-ink)]" />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <h2 className="text-2xl font-black">{selectedCustomer.name}</h2>
-                      <div className="flex items-center gap-4 text-xs font-mono opacity-70">
-                        <span className="flex items-center gap-1"><Mail className="h-3 w-3" /> cust_{selectedCustomer.id.substring(0, 5)}@email.com</span>
-                        <span className="flex items-center gap-1"><Phone className="h-3 w-3" /> +91 98765 43210</span>
+                      <h2 className="text-xl font-black">{customer.name}</h2>
+                      <div className="flex flex-wrap items-center gap-4 text-xs font-mono opacity-75">
+                        <span className="flex items-center gap-1"><Mail className="h-3 w-3" /> {customer.email}</span>
+                        <span className="flex items-center gap-1"><Phone className="h-3 w-3" /> {customer.phone || "+91 98765 43210"}</span>
                       </div>
                     </div>
                   </div>
                   <div className="text-right flex flex-col items-end">
                     <span className="text-[10px] font-bold uppercase tracking-widest opacity-60">Customer ID</span>
-                    <span className="font-mono">{selectedCustomer.id}</span>
+                    <span className="font-mono text-xs">{customer.id}</span>
                   </div>
                 </div>
 
                 {/* KPIs */}
                 <div className="grid grid-cols-4 gap-4">
                   <div className="flex flex-col p-4 border border-[var(--color-border-subtle)]">
-                    <span className="text-[10px] font-bold uppercase tracking-widest opacity-60 flex items-center gap-1"><CreditCard className="h-3 w-3" /> Total Payments</span>
-                    <span className="font-mono text-xl mt-2">{selectedCustomer.total_payments}</span>
+                    <span className="text-[10px] font-bold uppercase tracking-widest opacity-60 flex items-center gap-1"><CreditCard className="h-3 w-3" /> Lifetime Value</span>
+                    <span className="font-mono text-xl mt-2">{formatCurrency(customer.lifetime_value || 0)}</span>
                   </div>
                   <div className="flex flex-col p-4 border border-[var(--color-border-subtle)]">
-                    <span className="text-[10px] font-bold uppercase tracking-widest opacity-60 flex items-center gap-1"><ShieldCheck className="h-3 w-3" /> Successful</span>
-                    <span className="font-mono text-xl mt-2 text-[var(--color-success)]">{selectedCustomer.total_payments - selectedCustomer.failed_payments}</span>
+                    <span className="text-[10px] font-bold uppercase tracking-widest opacity-60 flex items-center gap-1"><ShieldCheck className="h-3 w-3" /> Successful Payments</span>
+                    <span className="font-mono text-xl mt-2 text-[var(--color-success)]">{customer.successful_payments || 0}</span>
                   </div>
                   <div className="flex flex-col p-4 border border-[var(--color-border-subtle)]">
                     <span className="text-[10px] font-bold uppercase tracking-widest opacity-60 flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Failed Payments</span>
-                    <span className="font-mono text-xl mt-2 text-[var(--color-failure)]">{selectedCustomer.failed_payments}</span>
+                    <span className="font-mono text-xl mt-2 text-[var(--color-failure)]">{customer.failed_payments || 0}</span>
                   </div>
                   <div className="flex flex-col p-4 border border-[var(--color-border-subtle)] bg-[var(--color-ink)] text-[var(--color-paper)]">
-                    <span className="text-[10px] font-bold uppercase tracking-widest opacity-80">Recovery Rate</span>
-                    <span className="font-mono text-xl mt-2">{Math.floor(Math.random() * 40) + 40}%</span>
+                    <span className="text-[10px] font-bold uppercase tracking-widest opacity-80">Recovery Success</span>
+                    <span className="font-mono text-xl mt-2">{recoveryRate}%</span>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-8">
-                  {/* Financial Metrics */}
-                  <div className="flex flex-col gap-4">
-                    <h3 className="text-xs font-bold uppercase tracking-wider border-b border-[var(--color-border-subtle)] pb-2 text-[var(--color-ink)]">Revenue Profile</h3>
-                    <div className="flex flex-col text-sm border border-[var(--color-border-subtle)]">
-                      <div className="flex justify-between p-3 border-b border-[var(--color-border-subtle)] bg-[var(--color-ink)]/5">
-                        <span className="opacity-70 font-bold uppercase text-xs">Total Lifetime Value</span>
-                        <span className="font-mono font-bold">{formatCurrency(selectedCustomer.total_payments * 2500)}</span>
-                      </div>
-                      <div className="flex justify-between p-3 border-b border-[var(--color-border-subtle)]">
-                        <span className="opacity-70 font-bold uppercase text-xs">Revenue At Risk</span>
-                        <span className="font-mono text-[var(--color-warning)]">{formatCurrency(selectedCustomer.failed_payments * 2500)}</span>
-                      </div>
-                      <div className="flex justify-between p-3">
-                        <span className="opacity-70 font-bold uppercase text-xs">Recovered Revenue</span>
-                        <span className="font-mono text-[var(--color-success)]">{formatCurrency(selectedCustomer.failed_payments * 2500 * 0.4)}</span>
-                      </div>
-                    </div>
+                {/* Real Payment History */}
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-center justify-between border-b border-[var(--color-border-subtle)] pb-2">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--color-ink)] flex items-center gap-2">
+                      <History className="h-4 w-4 opacity-70" />
+                      Live Transaction History ({payments.length})
+                    </h3>
                   </div>
 
-                  {/* Failure History */}
-                  <div className="flex flex-col gap-4">
-                    <h3 className="text-xs font-bold uppercase tracking-wider border-b border-[var(--color-border-subtle)] pb-2 text-[var(--color-ink)]">Recent Failures</h3>
-                    <div className="flex flex-col text-sm border border-[var(--color-border-subtle)]">
-                      <div className="flex justify-between p-3 border-b border-[var(--color-border-subtle)] hover:bg-[var(--color-ink)]/5">
-                        <div className="flex flex-col gap-1">
-                          <span className="font-mono text-xs opacity-60">2026-08-30</span>
-                          <span className="text-[var(--color-failure)] font-bold text-xs uppercase">INSUFFICIENT FUNDS</span>
-                        </div>
-                        <span className="font-mono text-right">{formatCurrency(2500)}</span>
-                      </div>
-                      <div className="flex justify-between p-3 border-b border-[var(--color-border-subtle)] hover:bg-[var(--color-ink)]/5">
-                        <div className="flex flex-col gap-1">
-                          <span className="font-mono text-xs opacity-60">2026-07-15</span>
-                          <span className="text-[var(--color-failure)] font-bold text-xs uppercase">DO NOT HONOR</span>
-                        </div>
-                        <span className="font-mono text-right">{formatCurrency(4999)}</span>
-                      </div>
-                      <div className="p-3 text-center text-xs font-bold uppercase text-[var(--color-ink)]/50 cursor-pointer hover:bg-[var(--color-ink)]/5">
-                        View All History
-                      </div>
+                  {loadingDetails ? (
+                    <div className="font-mono text-xs opacity-50 py-4">Fetching ledger records...</div>
+                  ) : payments.length === 0 ? (
+                    <EmptyState title="No Transactions" message="No payment transactions logged for this customer." />
+                  ) : (
+                    <div className="border border-[var(--color-border-subtle)] overflow-hidden">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-[var(--color-ink)]/5 border-b border-[var(--color-border-subtle)] font-mono uppercase tracking-wider">
+                          <tr>
+                            <th className="p-3">Payment ID</th>
+                            <th className="p-3">Method</th>
+                            <th className="p-3">Bank</th>
+                            <th className="p-3 text-right">Amount</th>
+                            <th className="p-3">Status</th>
+                            <th className="p-3">Failure Reason</th>
+                            <th className="p-3">Date</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[var(--color-border-subtle)] font-mono">
+                          {payments.map((p: any) => {
+                            const isRecovered = p.status === 'recovered';
+                            const isSuccess = p.status === 'successful';
+                            return (
+                              <tr key={p.id} className="hover:bg-[var(--color-ink)]/5">
+                                <td className="p-3 font-bold">{p.id}</td>
+                                <td className="p-3 uppercase">{p.payment_method}</td>
+                                <td className="p-3">{p.bank || "—"}</td>
+                                <td className="p-3 text-right font-bold">{formatCurrency(p.amount)}</td>
+                                <td className="p-3">
+                                  <span className={`px-1.5 py-0.5 text-[10px] font-bold uppercase ${isSuccess ? 'bg-[var(--color-success)]/10 text-[var(--color-success)]' : isRecovered ? 'bg-[var(--color-ink)] text-[var(--color-paper)]' : 'bg-[var(--color-failure)]/10 text-[var(--color-failure)]'}`}>
+                                    {p.status}
+                                  </span>
+                                </td>
+                                <td className="p-3 text-[11px] opacity-70">{p.failure_reason || "—"}</td>
+                                <td className="p-3 opacity-60 text-[11px]">{new Date(p.created_at).toLocaleDateString()}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </div>
-                  </div>
+                  )}
                 </div>
 
               </div>
             ) : (
-              <div className="flex-1 flex items-center justify-center font-mono text-sm uppercase opacity-50">
-                Select a customer to view profile
+              <div className="flex h-full items-center justify-center font-mono text-xs opacity-50">
+                Select a customer to inspect profile
               </div>
             )}
           </div>
         </div>
       )}
     </AppShell>
-  )
+  );
 }

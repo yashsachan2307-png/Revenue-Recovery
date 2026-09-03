@@ -1,17 +1,22 @@
 import * as React from "react"
 import { Sidebar } from "./Sidebar"
-import { Search, Bell, User, Calendar, X } from "lucide-react"
+import { Search, Bell, LogOut, Calendar } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 import { Drawer } from "../components/ui/Drawer"
+import { useAuth } from "../lib/AuthContext"
 
 export function AppShell({ children, title }: { children: React.ReactNode; title: string }) {
+  const { user, merchant, logout } = useAuth();
   const [showNotifications, setShowNotifications] = React.useState(false);
   const currentDate = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
   const { data: notifications } = useQuery({
     queryKey: ['notifications'],
     queryFn: async () => {
-      const res = await fetch('/api/notifications');
+      const token = localStorage.getItem('recoverai_auth_token');
+      const res = await fetch('/api/notifications', {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
       if (!res.ok) throw new Error('Failed to fetch notifications');
       return res.json();
     }
@@ -29,8 +34,12 @@ export function AppShell({ children, title }: { children: React.ReactNode; title
             <h1 className="text-lg font-black uppercase tracking-widest">{title}</h1>
             <div className="h-4 w-px bg-[var(--color-border-subtle)]"></div>
             <div className="flex flex-col">
-              <span className="text-xs font-bold leading-tight">Demo Merchant</span>
-              <span className="text-[10px] uppercase tracking-wider text-[var(--color-ink)]/60">MID 100001</span>
+              <span className="text-xs font-bold leading-tight truncate max-w-[200px]">
+                {merchant?.name || "Desi Gadgets Pvt Ltd"}
+              </span>
+              <span className="text-[10px] uppercase tracking-wider text-[var(--color-ink)]/60 font-mono">
+                MID {merchant?.id || "M-IND-001"}
+              </span>
             </div>
           </div>
 
@@ -47,17 +56,32 @@ export function AppShell({ children, title }: { children: React.ReactNode; title
               <Calendar className="h-3.5 w-3.5 opacity-70" />
               <span>{currentDate}</span>
             </div>
+
+            {user && (
+              <div className="hidden lg:flex items-center gap-2 px-2.5 py-1 border border-[var(--color-border-subtle)] bg-[var(--color-ink)]/5 text-xs font-mono">
+                <span className="font-bold truncate max-w-[120px]">{user.name}</span>
+                <span className="text-[9px] uppercase px-1 py-0.2 bg-[var(--color-ink)] text-[var(--color-paper)] font-sans font-bold">
+                  {user.role === 'merchant_admin' ? 'Admin' : 'Staff'}
+                </span>
+              </div>
+            )}
+
             <button 
               onClick={() => setShowNotifications(true)}
               className="flex h-8 w-8 items-center justify-center border border-transparent hover:border-[var(--color-border-subtle)] transition-colors relative"
+              title="Notifications"
             >
               <Bell className="h-4 w-4" />
               {unreadCount > 0 && (
                 <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-[var(--color-failure)]"></span>
               )}
             </button>
-            <button className="flex h-8 w-8 items-center justify-center border border-transparent hover:border-[var(--color-border-subtle)] transition-colors">
-              <User className="h-4 w-4" />
+            <button 
+              onClick={() => logout()}
+              title="Log Out"
+              className="flex h-8 w-8 items-center justify-center border border-transparent hover:border-[var(--color-border-subtle)] transition-colors text-[var(--color-ink)]/60 hover:text-[var(--color-failure)]"
+            >
+              <LogOut className="h-4 w-4" />
             </button>
           </div>
         </header>
@@ -72,7 +96,6 @@ export function AppShell({ children, title }: { children: React.ReactNode; title
         isOpen={showNotifications}
         onClose={() => setShowNotifications(false)}
         title="Notifications"
-        width="400px"
       >
         <div className="flex flex-col gap-4">
           {(notifications || []).length === 0 ? (

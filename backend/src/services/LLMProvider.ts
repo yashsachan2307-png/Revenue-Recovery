@@ -1,10 +1,11 @@
+import { RecoveryStrategy } from "../../../shared/src";
+
 export interface AgentDecision {
-  recoveryType: 'WAIT_AND_RETRY' | 'NOTIFY_CUSTOMER' | 'RETRY_ALTERNATIVE_METHOD' | 'ESCALATE' | 'STOP_RECOVERY';
+  detectedIssue: string;
+  probableCause: string;
+  recommendedStrategy: RecoveryStrategy;
   confidence: number;
-  reason: string;
-  urgency: 'LOW' | 'MEDIUM' | 'HIGH';
-  expectedOutcome: string;
-  requiresEscalation: boolean;
+  explanation: string;
 }
 
 export class LLMProvider {
@@ -22,12 +23,11 @@ export class LLMProvider {
         Analyze the following failed payment context and recommend a recovery strategy.
         Respond ONLY with a valid JSON object matching this structure, and nothing else:
         {
-          "recoveryType": "WAIT_AND_RETRY" | "NOTIFY_CUSTOMER" | "RETRY_ALTERNATIVE_METHOD" | "ESCALATE" | "STOP_RECOVERY",
+          "detectedIssue": "Short description of the failure",
+          "probableCause": "Business logic reasoning for why it failed",
+          "recommendedStrategy": "Wait & Retry" | "Notify Customer" | "Alternative Payment Method" | "Escalate" | "Stop Recovery",
           "confidence": number (0-100),
-          "reason": "Concise business reasoning",
-          "urgency": "LOW" | "MEDIUM" | "HIGH",
-          "expectedOutcome": "Expected outcome string",
-          "requiresEscalation": boolean
+          "explanation": "Concise business reasoning for the recommended strategy"
         }
 
         Context:
@@ -67,67 +67,61 @@ export class LLMProvider {
 
     if (reason === 'insufficient_funds') {
       return {
-        recoveryType: 'WAIT_AND_RETRY',
+        detectedIssue: 'Insufficient Funds',
+        probableCause: 'Customer account lacks available balance for the transaction.',
+        recommendedStrategy: 'Wait & Retry',
         confidence: 85,
-        reason: 'Insufficient funds typically resolve within a few days. Recommended delayed retry.',
-        urgency: 'LOW',
-        expectedOutcome: 'Successful charge after funds are added',
-        requiresEscalation: false
+        explanation: 'Insufficient funds typically resolve within a few days when customers top up. Recommended delayed retry.'
       };
     }
 
     if (reason === 'network_error') {
       return {
-        recoveryType: 'WAIT_AND_RETRY',
+        detectedIssue: 'Network Error',
+        probableCause: 'Transient connectivity issue between bank and payment gateway.',
+        recommendedStrategy: 'Wait & Retry',
         confidence: 90,
-        reason: 'Network errors are transient. Immediate retry recommended.',
-        urgency: 'HIGH',
-        expectedOutcome: 'Successful charge on immediate retry',
-        requiresEscalation: false
+        explanation: 'Network errors are transient. Immediate retry recommended.'
       };
     }
 
     if (reason === 'bank_timeout') {
       return {
-        recoveryType: 'WAIT_AND_RETRY',
+        detectedIssue: 'Bank Timeout',
+        probableCause: 'Issuing bank is experiencing temporary downtime or high latency.',
+        recommendedStrategy: 'Wait & Retry',
         confidence: 80,
-        reason: 'Bank timeouts indicate temporary downtime. Delayed retry recommended.',
-        urgency: 'MEDIUM',
-        expectedOutcome: 'Successful charge on delayed retry',
-        requiresEscalation: false
+        explanation: 'Bank timeouts indicate temporary downtime. Delayed retry recommended.'
       };
     }
 
     if (reason === 'authentication_failed') {
       return {
-        recoveryType: 'NOTIFY_CUSTOMER',
+        detectedIssue: 'Authentication Failed',
+        probableCause: '3DS or OTP validation failed during checkout.',
+        recommendedStrategy: 'Notify Customer',
         confidence: 95,
-        reason: 'Customer verification required due to failed authentication.',
-        urgency: 'HIGH',
-        expectedOutcome: 'Customer completes 3DS/verification',
-        requiresEscalation: false
+        explanation: 'Customer verification required due to failed authentication.'
       };
     }
 
     if (reason === 'card_declined' || reason === 'expired_card') {
       return {
-        recoveryType: 'RETRY_ALTERNATIVE_METHOD',
+        detectedIssue: 'Card Declined / Expired',
+        probableCause: 'The card on file is no longer valid or was declined by the issuer.',
+        recommendedStrategy: 'Alternative Payment Method',
         confidence: 90,
-        reason: 'Card was declined. Request alternate payment method.',
-        urgency: 'HIGH',
-        expectedOutcome: 'Customer provides new payment method',
-        requiresEscalation: false
+        explanation: 'Card was declined. Request alternate payment method.'
       };
     }
 
     // Default
     return {
-      recoveryType: 'ESCALATE',
+      detectedIssue: 'Unknown Failure',
+      probableCause: 'The exact cause of the failure could not be determined.',
+      recommendedStrategy: 'Escalate',
       confidence: 70,
-      reason: 'Unknown failure reason. Safe escalation.',
-      urgency: 'MEDIUM',
-      expectedOutcome: 'Human review required',
-      requiresEscalation: true
+      explanation: 'Unknown failure reason requires human review. Safe escalation.'
     };
   }
 }

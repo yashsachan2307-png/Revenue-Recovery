@@ -1,5 +1,8 @@
 import { db } from "../database";
 import { LLMProvider, AgentDecision } from "./LLMProvider";
+import { FailureAnalysisService } from "./FailureAnalysisService";
+import { PolicyEngine } from "./PolicyEngine";
+import { ActionExecutor } from "./ActionExecutor";
 
 export class RecoveryAgent {
   static async analyzeOpportunity(opportunityId: string): Promise<AgentDecision> {
@@ -32,5 +35,20 @@ export class RecoveryAgent {
     // Call LLM
     const decision = await LLMProvider.analyze(context);
     return decision;
+  }
+
+  static async executePipeline(opportunityId: string, actor: string = 'system') {
+    // 1. Context / Risk Detection is done inside analyzeOpportunity
+    // 2. Classify (already partially in opportunity generation, but we could re-eval here, let's just proceed to analysis)
+    // 3. AI Analysis
+    const decision = await this.analyzeOpportunity(opportunityId);
+
+    // 4. Policy Evaluation
+    const policyResult = PolicyEngine.evaluate(opportunityId, decision);
+
+    // 5. Bounded Action / Execution / Outcome / Audit
+    const result = ActionExecutor.executeAction(opportunityId, decision, policyResult, actor);
+
+    return result;
   }
 }

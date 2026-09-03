@@ -38,6 +38,15 @@ export const FailureCategoryEnum = z.enum([
 ]);
 export type FailureCategory = z.infer<typeof FailureCategoryEnum>;
 
+export const RecoveryStrategyEnum = z.enum([
+  "Wait & Retry",
+  "Notify Customer",
+  "Alternative Payment Method",
+  "Escalate",
+  "Stop Recovery"
+]);
+export type RecoveryStrategy = z.infer<typeof RecoveryStrategyEnum>;
+
 export const MerchantSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -96,3 +105,21 @@ export const RecoveryEventSchema = z.object({
   created_at: z.string()
 });
 export type RecoveryEvent = z.infer<typeof RecoveryEventSchema>;
+
+export const UserSchema = z.object({
+  id: z.string(),
+  merchant_id: z.string(),
+  name: z.string(),
+  email: z.string().email(),
+  role: z.string(),
+  created_at: z.string()
+});
+export type User = z.infer<typeof UserSchema>;
+
+export const AuthResponseSchema = z.object({
+  token: z.string(),
+  user: UserSchema,
+  merchant: MerchantSchema
+});
+export type AuthResponse = z.infer<typeof AuthResponseSchema>;
+

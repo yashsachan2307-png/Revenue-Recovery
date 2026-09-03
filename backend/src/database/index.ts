@@ -14,6 +14,27 @@ export function initDb() {
       currency TEXT NOT NULL,
       created_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      merchant_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      email TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'merchant_admin',
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (merchant_id) REFERENCES merchants(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      token TEXT UNIQUE NOT NULL,
+      expires_at TEXT NOT NULL,
+      used INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    );
     
     CREATE TABLE IF NOT EXISTS customers (
       id TEXT PRIMARY KEY,
@@ -24,6 +45,7 @@ export function initDb() {
       lifetime_value REAL NOT NULL DEFAULT 0,
       successful_payments INTEGER NOT NULL DEFAULT 0,
       failed_payments INTEGER NOT NULL DEFAULT 0,
+      risk_level TEXT,
       created_at TEXT NOT NULL,
       FOREIGN KEY (merchant_id) REFERENCES merchants(id)
     );
@@ -37,6 +59,7 @@ export function initDb() {
       status TEXT NOT NULL,
       failure_reason TEXT,
       payment_method TEXT NOT NULL,
+      bank TEXT,
       attempt_number INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
@@ -94,29 +117,37 @@ export function initDb() {
       created_at TEXT NOT NULL
     );
     
+    DROP TABLE IF EXISTS evaluation_cases;
+    DROP TABLE IF EXISTS evaluation_runs;
+
     CREATE TABLE IF NOT EXISTS evaluation_runs (
       id TEXT PRIMARY KEY,
       total_cases INTEGER NOT NULL,
+      revenue_at_risk REAL NOT NULL,
+      revenue_recovered_baseline REAL NOT NULL,
+      revenue_recovered_ai REAL NOT NULL,
+      baseline_recovery_rate REAL NOT NULL,
+      ai_recovery_rate REAL NOT NULL,
+      improvement_percentage REAL NOT NULL,
       accuracy REAL NOT NULL,
-      precision REAL NOT NULL,
-      recall REAL NOT NULL,
-      f1 REAL NOT NULL,
-      false_positive_rate REAL NOT NULL,
-      false_negative_rate REAL NOT NULL,
-      policy_violations INTEGER NOT NULL,
-      successful_recovery_rate REAL NOT NULL,
+      escalations INTEGER NOT NULL,
+      policy_blocks INTEGER NOT NULL,
+      duplicate_actions_prevented INTEGER NOT NULL,
       created_at TEXT NOT NULL
     );
     
     CREATE TABLE IF NOT EXISTS evaluation_cases (
       id TEXT PRIMARY KEY,
       run_id TEXT NOT NULL,
+      amount_at_risk REAL NOT NULL,
       failure_category TEXT NOT NULL,
       expected_action TEXT NOT NULL,
-      recommended_action TEXT NOT NULL,
+      baseline_action TEXT NOT NULL,
+      ai_action TEXT NOT NULL,
       policy_approved INTEGER NOT NULL,
       policy_reason TEXT,
-      is_correct INTEGER NOT NULL,
+      baseline_success INTEGER NOT NULL,
+      ai_success INTEGER NOT NULL,
       created_at TEXT NOT NULL,
       FOREIGN KEY (run_id) REFERENCES evaluation_runs(id)
     );
@@ -160,6 +191,14 @@ export function initDb() {
       case_id TEXT,
       created_at TEXT NOT NULL
     );
+    
+    CREATE INDEX IF NOT EXISTS idx_payments_status_timestamp ON payments(status, created_at);
+    CREATE INDEX IF NOT EXISTS idx_opportunities_status ON recovery_opportunities(status);
+    CREATE INDEX IF NOT EXISTS idx_logs_payment ON audit_logs(payment_id);
+    CREATE INDEX IF NOT EXISTS idx_jobs_status ON scheduled_jobs(status, scheduled_for);
+    CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+    CREATE INDEX IF NOT EXISTS idx_users_merchant ON users(merchant_id);
+    CREATE INDEX IF NOT EXISTS idx_reset_tokens_token ON password_reset_tokens(token);
   `);
 
   // Initial seeding for Workflows and Templates

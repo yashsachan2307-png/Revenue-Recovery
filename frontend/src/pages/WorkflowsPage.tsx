@@ -1,18 +1,21 @@
-import React, { useState } from "react"
+import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { AppShell } from "../layouts/AppShell"
 import { Panel, PanelHeader } from "../components/ui/Panel"
-import { Play, CheckCircle2, XCircle, Plus, Workflow } from "lucide-react"
+import { Plus, Workflow } from "lucide-react"
 
 export function WorkflowsPage() {
   const queryClient = useQueryClient();
   const [showBuilder, setShowBuilder] = useState(false);
-  const [newRule, setNewRule] = useState({ name: '', amountThreshold: '', failureReason: '', action: 'WAIT_AND_RETRY' });
+  const [newRule, setNewRule] = useState({ name: '', amountThreshold: '', failureReason: '', action: 'Wait & Retry' });
 
   const { data: workflows, isLoading } = useQuery({
     queryKey: ['workflows'],
     queryFn: async () => {
-      const res = await fetch('/api/workflows');
+      const token = localStorage.getItem('recoverai_auth_token');
+      const res = await fetch('/api/workflows', {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
       if (!res.ok) throw new Error('Failed to fetch workflows');
       return res.json();
     }
@@ -21,7 +24,10 @@ export function WorkflowsPage() {
   const { data: templates } = useQuery({
     queryKey: ['templates'],
     queryFn: async () => {
-      const res = await fetch('/api/templates');
+      const token = localStorage.getItem('recoverai_auth_token');
+      const res = await fetch('/api/templates', {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
       if (!res.ok) throw new Error('Failed to fetch templates');
       return res.json();
     }
@@ -29,9 +35,13 @@ export function WorkflowsPage() {
 
   const toggleMutation = useMutation({
     mutationFn: async ({ id, is_active }: { id: string, is_active: boolean }) => {
+      const token = localStorage.getItem('recoverai_auth_token');
       const res = await fetch(`/api/workflows/${id}/toggle`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({ is_active })
       });
       if (!res.ok) throw new Error('Failed to update workflow');
@@ -59,18 +69,23 @@ export function WorkflowsPage() {
         action: newRule.action
       };
 
+      const token = localStorage.getItem('recoverai_auth_token');
       const res = await fetch(`/api/workflows`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify(payload)
       });
+
       if (!res.ok) throw new Error('Failed to create workflow');
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['workflows'] });
       setShowBuilder(false);
-      setNewRule({ name: '', amountThreshold: '', failureReason: '', action: 'WAIT_AND_RETRY' });
+      setNewRule({ name: '', amountThreshold: '', failureReason: '', action: 'Wait & Retry' });
     }
   });
 
@@ -140,10 +155,10 @@ export function WorkflowsPage() {
                   onChange={e => setNewRule({...newRule, action: e.target.value})}
                   className="px-3 py-2 border border-[var(--color-border-subtle)] bg-[var(--color-paper)] text-sm outline-none focus:border-[var(--color-ink)] uppercase"
                 >
-                  <option value="WAIT_AND_RETRY">Schedule Retry</option>
-                  <option value="RETRY_ALTERNATIVE_METHOD">Retry Alternative</option>
-                  <option value="NOTIFY_CUSTOMER">Notify Customer</option>
-                  <option value="ESCALATE">Escalate to Manual</option>
+                  <option value="Wait & Retry">Schedule Retry</option>
+                  <option value="Alternative Payment Method">Retry Alternative</option>
+                  <option value="Notify Customer">Notify Customer</option>
+                  <option value="Escalate">Escalate to Manual</option>
                 </select>
               </div>
             </div>

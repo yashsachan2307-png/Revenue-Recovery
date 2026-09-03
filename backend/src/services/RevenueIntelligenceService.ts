@@ -76,4 +76,64 @@ export class RevenueIntelligenceService {
       LIMIT ?
     `).all(limit);
   }
+
+  static getTrendMetrics(days = 7) {
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const daysList: { name: string; dateStr: string }[] = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
+      const dateStr = d.toISOString().split('T')[0];
+      const dayName = dayNames[d.getDay()];
+      daysList.push({ name: dayName, dateStr });
+    }
+
+    const rows = db.prepare(`
+      SELECT 
+        substr(created_at, 1, 10) as day,
+        SUM(CASE WHEN status = 'recovered' THEN amount ELSE 0 END) as recovered,
+        SUM(CASE WHEN status = 'failed' THEN amount ELSE 0 END) as at_risk
+      FROM payments
+      WHERE created_at >= date('now', '-${days} days')
+      GROUP BY day
+    `).all() as { day: string; recovered: number; at_risk: number }[];
+
+    const rowMap = new Map(rows.map(r => [r.day, r]));
+
+    return daysList.map(item => {
+      const match = rowMap.get(item.dateStr);
+      return {
+        name: item.name,
+        recovered: Math.round(match?.recovered || 0),
+        atRisk: Math.round(match?.at_risk || 0)
+      };
+    });
+  }
+
+  static getMethodDistribution() {
+    const rows = db.prepare(`
+      SELECT 
+        payment_method,
+        SUM(CASE WHEN status = 'recovered' THEN amount ELSE 0 END) as recovered,
+        SUM(CASE WHEN status = 'failed' THEN amount ELSE 0 END) as at_risk
+      FROM payments
+      GROUP BY payment_method
+    `).all() as { payment_method: string; recovered: number; at_risk: number }[];
+
+    const formatMethodName = (m: string) => {
+      if (!m) return 'Other';
+      const lower = m.toLowerCase();
+      if (lower === 'upi') return 'UPI';
+      if (lower === 'credit_card' || lower === 'card') return 'Card';
+      if (lower === 'debit_card') return 'Debit Card';
+      if (lower === 'net_banking' || lower === 'netbanking') return 'Netbanking';
+      return m.charAt(0).toUpperCase() + m.slice(1);
+    };
+
+    return rows.map(r => ({
+      name: formatMethodName(r.payment_method),
+      recovered: Math.round(r.recovered || 0),
+      atRisk: Math.round(r.at_risk || 0)
+    }));
+  }
 }
+

@@ -15,16 +15,19 @@ export class ActionExecutor {
     let newStatus = 'in_progress';
 
     // Simulate deterministic results for the buildathon
-    if (actionToExecute === 'WAIT_AND_RETRY') {
+    if (actionToExecute === 'Wait & Retry') {
       result = 'SUCCESS';
       newStatus = 'in_progress';
-    } else if (actionToExecute === 'NOTIFY_CUSTOMER') {
+    } else if (actionToExecute === 'Notify Customer') {
       result = 'SUCCESS';
       newStatus = 'in_progress';
-    } else if (actionToExecute === 'ESCALATE') {
+    } else if (actionToExecute === 'Alternative Payment Method') {
+      result = 'SUCCESS';
+      newStatus = 'in_progress';
+    } else if (actionToExecute === 'Escalate') {
       result = 'SUCCESS';
       newStatus = 'escalated';
-    } else if (actionToExecute === 'STOP') {
+    } else if (actionToExecute === 'Stop Recovery') {
       result = 'SUCCESS';
       newStatus = 'failed'; // Or stopped
     }

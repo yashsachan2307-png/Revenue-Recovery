@@ -6,3 +6,8 @@ build/
 backend/revenue_recovery.db
 backend/revenue_recovery.db-wal
 backend/revenue_recovery.db-shm
+
+*.js
+*.d.ts
+*.map
+*.tsbuildinfo

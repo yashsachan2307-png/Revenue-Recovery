@@ -32,11 +32,15 @@ export function Sidebar() {
     { name: "Recoveries", path: "/recoveries" },
     { name: "Customers", path: "/customers" },
     { name: "Agent Console", path: "/agent" },
-    { name: "Workflows", path: "/workflows" },
     { name: "Audit Log", path: "/audit-log" },
     { name: "Reports", path: "/reports" },
-    { name: "Evaluations", path: "/evaluations" },
     { name: "Settings", path: "/settings" },
+    { name: "Integrations", path: "/integrations" },
+  ]
+  
+  const advancedLinks = [
+    { name: "Workflows", path: "/workflows" },
+    { name: "Evaluations", path: "/evaluations" },
   ]
 
   return (
@@ -51,6 +55,24 @@ export function Sidebar() {
 
       <nav className="flex-1 space-y-1">
         {links.map((link) => (
+          <NavLink
+            key={link.name}
+            to={link.path}
+            className={({ isActive }: { isActive: boolean }) => `block border px-3 py-2 text-sm font-bold uppercase tracking-wider transition-colors ${
+              isActive
+                ? "border-[var(--color-ink)] bg-[var(--color-ink)] text-[var(--color-paper)]"
+                : "border-transparent text-[var(--color-ink)] hover:border-[var(--color-border-subtle)]"
+            }`}
+          >
+            {link.name}
+          </NavLink>
+        ))}
+
+        <div className="pt-6 pb-2">
+          <span className="px-3 text-[10px] font-bold uppercase tracking-widest opacity-50">Advanced Options</span>
+        </div>
+
+        {advancedLinks.map((link) => (
           <NavLink
             key={link.name}
             to={link.path}
