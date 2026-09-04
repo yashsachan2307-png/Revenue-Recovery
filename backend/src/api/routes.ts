@@ -5,6 +5,7 @@ import { PolicyEngine } from '../services/PolicyEngine';
 import { EvaluationEngine } from '../services/EvaluationEngine';
 import { AnalyticsEngine } from '../services/AnalyticsEngine';
 import { NotificationService } from '../services/NotificationService';
+import { RecoveryAgent } from '../services/RecoveryAgent';
 import { RecoveryOpportunityService } from "../services/RecoveryOpportunityService";
 import { RevenueIntelligenceService } from "../services/RevenueIntelligenceService";
 import { authRouter } from './authRoutes';
@@ -180,7 +181,7 @@ router.get("/recovery/cases/:id", (req, res) => {
 
 router.post("/recovery/cases/:id/analyse", async (req, res) => {
   try {
-    const decision = await LLMProvider.analyzeOpportunity(req.params.id);
+    const decision = await RecoveryAgent.analyzeOpportunity(req.params.id);
     const policyResult = PolicyEngine.evaluate(req.params.id, decision);
     res.json({ agentDecision: decision, policyResult });
   } catch (error: any) {
@@ -246,7 +247,7 @@ router.get("/evaluations/:id", (req, res) => {
   if (!run) return res.status(404).json({ error: "Run not found" });
   
   const cases = db.prepare(`SELECT * FROM evaluation_cases WHERE run_id = ?`).all(req.params.id);
-  res.json({ ...run, cases });
+  res.json({ ...(run as any), cases });
 });
 
 // Phase 7: Analytics, Workflows, Templates, Notifications
@@ -254,7 +255,9 @@ router.get("/evaluations/:id", (req, res) => {
 router.get('/analytics', (req: Request, res: Response) => {
   const days = parseInt((req.query.days as string) || '30', 10);
   try {
-    const data = AnalyticsEngine.getAdvancedMetrics(days);
+    const endDate = new Date().toISOString();
+    const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+    const data = AnalyticsEngine.getAdvancedMetrics(startDate, endDate);
     res.json(data);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -335,7 +338,7 @@ router.get('/notifications', (req: Request, res: Response) => {
 
 router.post('/notifications/:id/read', (req: Request, res: Response) => {
   try {
-    NotificationService.markAsRead(req.params.id);
+    NotificationService.markAsRead(req.params.id as string);
     res.json({ success: true });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -457,8 +460,8 @@ router.get("/agent/decisions", (req, res) => {
 router.get("/analytics", (req, res) => {
   try {
     const days = parseInt((req.query.days as string) || '30', 10);
-    let startDate = req.query.startDate as string;
-    let endDate = req.query.endDate as string;
+    let startDate = req.query.startDate as string | undefined;
+    let endDate = req.query.endDate as string | undefined;
     
     if (!startDate || !endDate) {
       endDate = new Date().toISOString();
@@ -539,11 +542,11 @@ router.post("/system/reset-demo", (req: Request, res: Response) => {
     // Perform a complete fresh seed of synthetic Indian merchant data
     seedDatabase();
 
-    NotificationService.create({
-      type: 'SYSTEM',
-      title: 'Demo Environment Reset',
-      message: 'Demo merchant environment has been refreshed with synthetic Indian merchant data.'
-    });
+    NotificationService.create(
+      'SYSTEM',
+      'Demo Environment Reset',
+      'Demo merchant environment has been refreshed with synthetic Indian merchant data.'
+    );
 
     res.json({ success: true, message: "Demo environment has been reset and reseeded successfully." });
   } catch (error: any) {

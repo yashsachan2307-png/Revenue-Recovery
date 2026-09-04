@@ -13,7 +13,6 @@ export class LLMProvider {
     const apiKey = process.env.GEMINI_API_KEY;
 
     if (!apiKey) {
-      console.log("[LLMProvider] No API key found. Falling back to deterministic rules.");
       return this.deterministicFallback(context);
     }
 
@@ -57,7 +56,6 @@ export class LLMProvider {
       return JSON.parse(text) as AgentDecision;
 
     } catch (error) {
-      console.error("[LLMProvider] LLM failed, falling back:", error);
       return this.deterministicFallback(context);
     }
   }

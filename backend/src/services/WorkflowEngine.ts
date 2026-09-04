@@ -49,7 +49,6 @@ export class WorkflowEngine {
     // Check retry limits (we can check payment attempt number or just count audits for this workflow)
     const auditCount = db.prepare(`SELECT count(*) as count FROM audit_logs WHERE payment_id = ? AND workflow_id = ?`).get(payment.id, matchedWorkflow.id) as { count: number };
     if (auditCount.count >= matchedWorkflow.retry_limit) {
-      console.log(`[WorkflowEngine] Retry limit reached for WF ${matchedWorkflow.id} on Payment ${payment.id}`);
       return;
     }
 
@@ -63,7 +62,6 @@ export class WorkflowEngine {
     if (lastAudit) {
       const hoursSinceLast = (Date.now() - new Date(lastAudit.created_at).getTime()) / (1000 * 60 * 60);
       if (hoursSinceLast < matchedWorkflow.cooldown_hours) {
-        console.log(`[WorkflowEngine] Cooldown active for WF ${matchedWorkflow.id} on Payment ${payment.id}`);
         return;
       }
     }

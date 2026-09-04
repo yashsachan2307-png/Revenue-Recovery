@@ -82,8 +82,8 @@ export class RevenueIntelligenceService {
     const daysList: { name: string; dateStr: string }[] = [];
     for (let i = days - 1; i >= 0; i--) {
       const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
-      const dateStr = d.toISOString().split('T')[0];
-      const dayName = dayNames[d.getDay()];
+      const dateStr = d.toISOString().split('T')[0] as string;
+      const dayName = dayNames[d.getDay()] as string;
       daysList.push({ name: dayName, dateStr });
     }
 

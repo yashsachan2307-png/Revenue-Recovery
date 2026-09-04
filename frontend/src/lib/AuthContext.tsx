@@ -79,7 +79,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
       } catch (err) {
-        console.error('Session validation error:', err);
         // On network error, retain token to allow retry or offline state, but stop loading
       } finally {
         if (isMounted) {

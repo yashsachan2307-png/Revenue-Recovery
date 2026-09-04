@@ -51,8 +51,8 @@ export class RecoveryOpportunityService {
 
         // Process immediately through the workflow automation layer
         // In a real system, this could be dispatched to a background queue
-        WorkflowEngine.processOpportunity(oppId).catch(err => {
-          console.error(`[RecoveryOpportunityService] Error processing workflow for ${oppId}`, err);
+        WorkflowEngine.processOpportunity(oppId).catch(() => {
+          // In a real system, log to a central APM/Monitoring service
         });
       }
     })();

@@ -1,8 +1,9 @@
-import Database from "better-sqlite3";
-import path from "path";
+import Database, { Database as DBType } from 'better-sqlite3';
+import path from 'path';
+import fs from 'fs';
 
 const dbPath = path.resolve(__dirname, "../../revenue_recovery.db");
-export const db = new Database(dbPath, { verbose: console.log });
+export const db: DBType = new Database(dbPath, { verbose: console.log });
 
 export function initDb() {
   db.pragma('journal_mode = WAL');

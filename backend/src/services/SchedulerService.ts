@@ -10,14 +10,12 @@ export class SchedulerService {
       this.processJobs();
     }, intervalMs);
     
-    console.log(`[Scheduler] Started polling every ${intervalMs}ms`);
   }
 
   static stop() {
     if (this.intervalId) {
       clearInterval(this.intervalId);
       this.intervalId = null;
-      console.log(`[Scheduler] Stopped`);
     }
   }
 
@@ -27,7 +25,7 @@ export class SchedulerService {
     const pendingJobs = db.prepare(`
       SELECT * FROM scheduled_jobs 
       WHERE status = 'PENDING' AND scheduled_for <= ?
-    `).all(now);
+    `).all(now) as any[];
 
     if (pendingJobs.length === 0) return;
 
