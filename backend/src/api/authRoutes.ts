@@ -1,11 +1,20 @@
 import { Router, Request, Response } from 'express';
 import { AuthService } from '../services/AuthService';
 import { authMiddleware, AuthenticatedRequest } from './middleware/authMiddleware';
+import rateLimit from 'express-rate-limit';
 
 const router = Router();
 
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20, // Limit each IP to 20 requests per `window` for auth routes
+  message: { error: 'Too many authentication attempts, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // POST /api/auth/login
-router.post('/login', (req: Request, res: Response) => {
+router.post('/login', authLimiter, (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) {
@@ -20,7 +29,7 @@ router.post('/login', (req: Request, res: Response) => {
 });
 
 // POST /api/auth/signup
-router.post('/signup', (req: Request, res: Response) => {
+router.post('/signup', authLimiter, (req: Request, res: Response) => {
   try {
     const { name, email, password, companyName } = req.body;
     if (!name || !email || !password) {
@@ -40,7 +49,7 @@ router.post('/signup', (req: Request, res: Response) => {
 });
 
 // POST /api/auth/demo
-router.post('/demo', (req: Request, res: Response) => {
+router.post('/demo', authLimiter, (req: Request, res: Response) => {
   try {
     const authResult = AuthService.demoLogin();
     return res.json(authResult);
@@ -73,7 +82,7 @@ router.get('/me', authMiddleware, (req: AuthenticatedRequest, res: Response) => 
 });
 
 // POST /api/auth/forgot-password
-router.post('/forgot-password', (req: Request, res: Response) => {
+router.post('/forgot-password', authLimiter, (req: Request, res: Response) => {
   try {
     const { email } = req.body;
     if (!email) {
@@ -95,7 +104,7 @@ router.post('/forgot-password', (req: Request, res: Response) => {
 });
 
 // POST /api/auth/reset-password
-router.post('/reset-password', (req: Request, res: Response) => {
+router.post('/reset-password', authLimiter, (req: Request, res: Response) => {
   try {
     const { token, newPassword } = req.body;
     if (!token || !newPassword) {

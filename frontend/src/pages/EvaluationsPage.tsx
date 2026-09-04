@@ -1,9 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Panel, PanelHeader } from '../components/ui/Panel';
-import { Play, CheckCircle2, XCircle, ArrowRight, IndianRupee } from 'lucide-react';
+import { Play, CheckCircle2, XCircle, ArrowRight } from 'lucide-react';
 import { AppShell } from '../layouts/AppShell';
 import { formatCurrency } from '../lib/utils';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 export function EvaluationsPage() {
   const queryClient = useQueryClient();
@@ -103,7 +103,7 @@ export function EvaluationsPage() {
                     <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fontWeight: 'bold' }} />
                     <YAxis tickFormatter={(val) => `₹${val/1000}k`} axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
                     <Tooltip 
-                      formatter={(value: number) => formatCurrency(value)}
+                      formatter={(value: any) => formatCurrency(Number(value))}
                       cursor={{fill: 'rgba(0,0,0,0.05)'}}
                       contentStyle={{ borderRadius: '0', border: '1px solid var(--color-ink)' }}
                     />

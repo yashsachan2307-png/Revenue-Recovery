@@ -79,7 +79,7 @@ export function seedDatabase() {
 
     const paymentIds: { id: string; customerId: string; status: string; amount: number; failureReason: string | null; date: string }[] = [];
 
-    for (let i = 0; i < 450; i++) {
+    for (let i = 0; i < 500; i++) {
       const pId = `PAY-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
       const cId = customerIds[Math.floor(Math.random() * customerIds.length)];
       const amount = amounts[Math.floor(Math.random() * amounts.length)];

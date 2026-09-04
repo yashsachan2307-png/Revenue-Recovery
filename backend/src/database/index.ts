@@ -95,6 +95,7 @@ export function initDb() {
       id TEXT PRIMARY KEY,
       recovery_opportunity_id TEXT NOT NULL,
       payment_id TEXT NOT NULL,
+      workflow_id TEXT,
       agent_decision TEXT,
       policy_decision TEXT,
       action TEXT,
@@ -104,7 +105,8 @@ export function initDb() {
       actor TEXT,
       created_at TEXT NOT NULL,
       FOREIGN KEY (recovery_opportunity_id) REFERENCES recovery_opportunities(id),
-      FOREIGN KEY (payment_id) REFERENCES payments(id)
+      FOREIGN KEY (payment_id) REFERENCES payments(id),
+      FOREIGN KEY (workflow_id) REFERENCES workflows(id)
     );
     
     CREATE TABLE IF NOT EXISTS policies (
@@ -117,6 +119,25 @@ export function initDb() {
       created_at TEXT NOT NULL
     );
     
+    DROP TABLE IF EXISTS audit_logs;
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id TEXT PRIMARY KEY,
+      recovery_opportunity_id TEXT NOT NULL,
+      payment_id TEXT NOT NULL,
+      workflow_id TEXT,
+      agent_decision TEXT,
+      policy_decision TEXT,
+      action TEXT,
+      result TEXT,
+      reason TEXT,
+      confidence REAL,
+      actor TEXT,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (recovery_opportunity_id) REFERENCES recovery_opportunities(id),
+      FOREIGN KEY (payment_id) REFERENCES payments(id),
+      FOREIGN KEY (workflow_id) REFERENCES workflows(id)
+    );
+
     DROP TABLE IF EXISTS evaluation_cases;
     DROP TABLE IF EXISTS evaluation_runs;
 
@@ -152,12 +173,17 @@ export function initDb() {
       FOREIGN KEY (run_id) REFERENCES evaluation_runs(id)
     );
 
+    DROP TABLE IF EXISTS workflows;
     CREATE TABLE IF NOT EXISTS workflows (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
+      description TEXT,
       trigger TEXT NOT NULL,
       conditions_json TEXT NOT NULL,
       action TEXT NOT NULL,
+      retry_limit INTEGER NOT NULL DEFAULT 3,
+      cooldown_hours INTEGER NOT NULL DEFAULT 24,
+      stop_conditions_json TEXT,
       is_active INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL
     );
@@ -205,26 +231,54 @@ export function initDb() {
   const countWorkflows = db.prepare(`SELECT count(*) as count FROM workflows`).get() as { count: number };
   if (countWorkflows.count === 0) {
     const insertWorkflow = db.prepare(`
-      INSERT INTO workflows (id, name, trigger, conditions_json, action, is_active, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO workflows (id, name, description, trigger, conditions_json, action, retry_limit, cooldown_hours, stop_conditions_json, is_active, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
     insertWorkflow.run(
       'WF-1', 
-      'High Value Escalate', 
+      'Recover High-Value Failed Payments', 
+      'Automatically escalate large transactions to the manual review queue.',
       'PAYMENT_FAILED', 
       JSON.stringify([{ field: 'amount', operator: '>', value: 25000 }]), 
-      'ESCALATE', 
+      'Escalate', 
+      1, 24, JSON.stringify([]),
       1, 
       new Date().toISOString()
     );
     
     insertWorkflow.run(
       'WF-2', 
-      'Network Error Retry', 
+      'Retry Temporary Network Failures', 
+      'Wait and retry payments that failed due to temporary network issues.',
       'PAYMENT_FAILED', 
-      JSON.stringify([{ field: 'failureReason', operator: '==', value: 'NETWORK_ERROR' }]), 
-      'WAIT_AND_RETRY', 
+      JSON.stringify([{ field: 'failure_reason', operator: '==', value: 'NETWORK_ERROR' }]), 
+      'Wait & Retry', 
+      3, 12, JSON.stringify([]),
+      1, 
+      new Date().toISOString()
+    );
+
+    insertWorkflow.run(
+      'WF-3', 
+      'Notify Customers After Payment Failure', 
+      'Send a notification email to customers who failed due to insufficient funds.',
+      'PAYMENT_FAILED', 
+      JSON.stringify([{ field: 'failure_reason', operator: '==', value: 'INSUFFICIENT_FUNDS' }]), 
+      'Notify Customer', 
+      2, 24, JSON.stringify([]),
+      1, 
+      new Date().toISOString()
+    );
+    
+    insertWorkflow.run(
+      'WF-4', 
+      'Escalate Repeated Failures', 
+      'Escalate payments that have failed more than 3 times.',
+      'PAYMENT_FAILED', 
+      JSON.stringify([{ field: 'attempt_number', operator: '>', value: 3 }]), 
+      'Escalate', 
+      1, 24, JSON.stringify([]),
       1, 
       new Date().toISOString()
     );

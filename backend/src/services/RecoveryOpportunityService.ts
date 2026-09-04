@@ -1,5 +1,6 @@
 import { db } from "../database";
 import { FailureAnalysisService } from "./FailureAnalysisService";
+import { WorkflowEngine } from "./WorkflowEngine";
 import crypto from "crypto";
 
 export class RecoveryOpportunityService {
@@ -33,8 +34,10 @@ export class RecoveryOpportunityService {
         if (category === "CUSTOMER_FUNDS") recommendedAction = "Notify Customer";
         if (category === "PAYMENT_METHOD") recommendedAction = "Alternative Payment Method";
 
+        const oppId = `REC-${crypto.randomUUID().slice(0,8).toUpperCase()}`;
+
         insertOpp.run(
-          `REC-${crypto.randomUUID().slice(0,8).toUpperCase()}`,
+          oppId,
           p.id,
           p.customer_id,
           p.amount,
@@ -45,6 +48,12 @@ export class RecoveryOpportunityService {
           new Date().toISOString(),
           new Date().toISOString()
         );
+
+        // Process immediately through the workflow automation layer
+        // In a real system, this could be dispatched to a background queue
+        WorkflowEngine.processOpportunity(oppId).catch(err => {
+          console.error(`[RecoveryOpportunityService] Error processing workflow for ${oppId}`, err);
+        });
       }
     })();
   }

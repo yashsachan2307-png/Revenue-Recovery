@@ -11,6 +11,7 @@ export function AgentConsole({ opportunityId, onClose, onComplete }: AgentConsol
   const [analyzing, setAnalyzing] = React.useState(true)
   const [executing, setExecuting] = React.useState(false)
   const [data, setData] = React.useState<any>(null)
+  const [error, setError] = React.useState<string | null>(null)
   
   React.useEffect(() => {
     if (!opportunityId) return;
@@ -24,7 +25,7 @@ export function AgentConsole({ opportunityId, onClose, onComplete }: AgentConsol
         const result = await response.json()
         setData(result)
       } catch (e) {
-        console.error(e)
+        setError("Failed to fetch recommendation")
       } finally {
         setAnalyzing(false)
         setAnalyzing(false)
@@ -51,24 +52,30 @@ export function AgentConsole({ opportunityId, onClose, onComplete }: AgentConsol
       })
       onComplete()
     } catch (e) {
-      console.error(e)
+      setError("Failed to execute action")
     } finally {
       setExecuting(false)
     }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-end bg-black/50 backdrop-blur-sm">
-      <div className="h-full w-[500px] border-l border-zinc-200 bg-white p-6 shadow-2xl dark:border-zinc-800 dark:bg-zinc-950 flex flex-col overflow-y-auto">
-        
-        <div className="flex items-center justify-between border-b border-zinc-200 pb-4 dark:border-zinc-800">
-          <h2 className="font-mono text-sm font-bold uppercase tracking-widest text-zinc-900 dark:text-zinc-100">
-            Agent Console
-          </h2>
-          <button onClick={onClose} className="font-mono text-xs uppercase text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100">
-            [ Close ]
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-[var(--color-paper)] border border-[var(--color-border-subtle)] w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col">
+        <div className="p-4 border-b border-[var(--color-border-subtle)] flex items-center justify-between sticky top-0 bg-[var(--color-paper)] z-10">
+          <div className="flex items-center gap-3">
+            <div className="h-2 w-2 rounded-full bg-[var(--color-ink)] animate-pulse" />
+            <h2 className="font-bold uppercase tracking-widest text-sm">AI Agent Console</h2>
+          </div>
+          <button onClick={onClose} className="opacity-50 hover:opacity-100 transition-opacity uppercase text-xs font-bold tracking-widest">
+            Close
           </button>
         </div>
+
+        {error && (
+          <div className="p-4 bg-[var(--color-failure)]/10 text-[var(--color-failure)] border-b border-[var(--color-failure)] text-xs font-mono">
+            Error: {error}
+          </div>
+        )}
 
         {analyzing ? (
           <div className="flex flex-1 flex-col items-center justify-center space-y-4">

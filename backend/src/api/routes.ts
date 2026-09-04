@@ -272,13 +272,34 @@ router.get('/workflows', (req: Request, res: Response) => {
 
 router.post('/workflows', (req: Request, res: Response) => {
   try {
-    const { name, trigger, conditions_json, action } = req.body;
+    const { name, description, trigger, conditions_json, action, retry_limit, cooldown_hours, stop_conditions_json } = req.body;
     const id = 'WF-' + Math.random().toString(36).substring(2, 9).toUpperCase();
     db.prepare(`
-      INSERT INTO workflows (id, name, trigger, conditions_json, action, is_active, created_at)
-      VALUES (?, ?, ?, ?, ?, 1, ?)
-    `).run(id, name, trigger, conditions_json, action, new Date().toISOString());
+      INSERT INTO workflows (id, name, description, trigger, conditions_json, action, retry_limit, cooldown_hours, stop_conditions_json, is_active, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+    `).run(
+      id, 
+      name, 
+      description || null, 
+      trigger, 
+      conditions_json, 
+      action, 
+      retry_limit || 3, 
+      cooldown_hours || 24, 
+      stop_conditions_json || JSON.stringify([]), 
+      new Date().toISOString()
+    );
     res.json({ id });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.delete('/workflows/:id', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    db.prepare('DELETE FROM workflows WHERE id = ?').run(id);
+    res.json({ success: true });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -500,16 +521,11 @@ router.post("/webhooks/payment", (req: Request, res: Response) => {
 
       RecoveryOpportunityService.generateOpportunities();
 
-      db.prepare(`
-        INSERT INTO audit_logs (id, recovery_opportunity_id, payment_id, action, result, reason, confidence, actor, created_at)
-        VALUES (?, '', ?, 'WEBHOOK_RECEIVED', 'SUCCESS', ?, 1.0, 'WEBHOOK', ?)
-      `).run(`AUD-${crypto.randomUUID().slice(0, 8).toUpperCase()}`, paymentId, `Received ${event} via Razorpay simulated webhook`, new Date().toISOString());
-      
-      NotificationService.create({
-        type: 'SYSTEM',
-        title: 'Payment Failure Ingested',
-        message: `Payment failure event processed for ${customerId}`
-      });
+      NotificationService.create(
+        'SYSTEM',
+        'New Failed Payment Detected',
+        `Simulated webhook for ${payload.amount || 25000} ${payload.currency || 'INR'} received.`
+      );
     }
 
     res.json({ success: true, received: true });

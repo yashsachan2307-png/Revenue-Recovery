@@ -8,7 +8,8 @@ export class ActionExecutor {
     opportunityId: string, 
     agentDecision: AgentDecision, 
     policyResult: PolicyResult, 
-    actor: string = 'system'
+    actor: string = 'system',
+    workflowId: string | null = null
   ) {
     const actionToExecute = policyResult.finalAction;
     let result = 'FAILED';
@@ -58,19 +59,20 @@ export class ActionExecutor {
 
       // 3. Audit Log
       db.prepare(`
-        INSERT INTO audit_logs (id, recovery_opportunity_id, payment_id, agent_decision, policy_decision, action, result, reason, confidence, actor, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO audit_logs (id, recovery_opportunity_id, payment_id, workflow_id, agent_decision, policy_decision, action, result, reason, confidence, actor, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         randomUUID(),
         opportunityId,
         paymentId,
+        workflowId ?? null,
         JSON.stringify(agentDecision),
         JSON.stringify(policyResult),
-        actionToExecute,
-        result,
-        policyResult.reason,
-        agentDecision.confidence,
-        actor,
+        actionToExecute ?? 'UNKNOWN',
+        result ?? 'FAILED',
+        policyResult.reason ?? null,
+        agentDecision.confidence ?? 0,
+        actor ?? 'system',
         new Date().toISOString()
       );
     });
