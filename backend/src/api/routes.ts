@@ -6,6 +6,7 @@ import { EvaluationEngine } from '../services/EvaluationEngine';
 import { AnalyticsEngine } from '../services/AnalyticsEngine';
 import { NotificationService } from '../services/NotificationService';
 import { RecoveryAgent } from '../services/RecoveryAgent';
+import { ActionExecutor } from '../services/ActionExecutor';
 import { RecoveryOpportunityService } from "../services/RecoveryOpportunityService";
 import { RevenueIntelligenceService } from "../services/RevenueIntelligenceService";
 import { authRouter } from './authRoutes';
@@ -17,8 +18,18 @@ const router = Router();
 // Mount Auth Sub-router
 router.use('/auth', authRouter);
 
+import { authMiddleware } from './middleware/authMiddleware';
+
 router.get("/health", (req, res) => {
   res.json({ status: "ok" });
+});
+
+// Apply authMiddleware to all subsequent routes except webhooks
+router.use((req, res, next) => {
+  if (req.path.startsWith('/webhooks')) {
+    return next();
+  }
+  return authMiddleware(req as any, res, next);
 });
 
 // GET /api/dashboard/summary
@@ -195,7 +206,8 @@ router.post("/recovery/cases/:id/action", async (req, res) => {
     if (!agentDecision || !policyResult) {
       return res.status(400).json({ error: "Missing agentDecision or policyResult" });
     }
-    res.json({ success: true });
+    const result = ActionExecutor.executeAction(req.params.id, agentDecision, policyResult, 'admin');
+    res.json({ success: true, result });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

@@ -31,7 +31,34 @@ initDb();
 // Start background scheduler
 SchedulerService.start(10000);
 
+import path from 'path';
+import { db } from './database';
+import { seedDatabase } from './database/seed';
+
+// Check if database needs seeding (for ephemeral deployments)
+try {
+  const row = db.prepare('SELECT count(*) as count FROM users').get() as { count: number };
+  if (row.count === 0) {
+    console.log('Database appears empty. Seeding synthetic data...');
+    seedDatabase();
+  }
+} catch (e) {
+  console.log('Error checking database state, might need initialization.');
+}
+
 app.use("/api", apiLimiter, apiRouter);
+
+// Serve static frontend files
+const frontendPath = path.join(__dirname, '../../frontend/dist');
+app.use(express.static(frontendPath));
+
+app.use((req, res, next) => {
+  if (req.method === 'GET' && req.accepts('html')) {
+    res.sendFile(path.join(frontendPath, 'index.html'));
+  } else {
+    next();
+  }
+});
 
 app.listen(port, () => {
   console.log(`Backend listening on port ${port}`);
