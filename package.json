@@ -3,7 +3,6 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "postinstall": "npm install --workspace=frontend && npm install --workspace=backend && npm install --workspace=shared",
     "build": "npm run build --workspace=frontend",
     "start": "cd backend && npm start"
   },
